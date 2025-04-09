@@ -1,6 +1,10 @@
 <div class="bg-gray-50 p-6">
   <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-    <h1 class="text-2xl font-bold text-gray-700">Statistiques : <span id="current-filter">Aujourd'hui</span></h1>
+    <div class="inline-flex items-center">
+      <span class="text-lg font-medium text-gray-500">Statistiques</span>
+      <span class="mx-2 text-gray-400">•</span>
+      <span id="current-filter" class="text-base bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md font-medium">Aujourd'hui</span>
+    </div>
     
     <div class="flex flex-wrap gap-2">
       <button id="filter-day" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">Aujourd'hui</button>
