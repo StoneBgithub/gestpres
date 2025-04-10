@@ -7,6 +7,7 @@ export function init() {
   initFilters();
   initToggleButtons();
   setupFilterActions();
+  setupDependencies(); // Ajout pour gérer les dépendances
 }
 
 // Initialiser les filtres
@@ -98,8 +99,11 @@ function initToggleButtons() {
 function setupFilterActions() {
   const applyFiltersBtn = document.getElementById("apply-filters");
   const resetFiltersBtn = document.getElementById("reset-filters");
+  const filterForm = document.getElementById("filter-form");
+  const timeRangeSelect = document.getElementById("time-range");
+  const customTimeDiv = document.getElementById("custom-time");
 
-  if (!applyFiltersBtn || !resetFiltersBtn) return;
+  if (!applyFiltersBtn || !resetFiltersBtn || !filterForm) return;
 
   // Réinitialiser les gestionnaires d'événements
   [applyFiltersBtn, resetFiltersBtn].forEach((btn) => {
@@ -111,69 +115,113 @@ function setupFilterActions() {
   const newApplyFiltersBtn = document.getElementById("apply-filters");
   const newResetFiltersBtn = document.getElementById("reset-filters");
 
-  // Appliquer les filtres
-  newApplyFiltersBtn.addEventListener("click", function () {
+  // Gérer la plage horaire personnalisée
+  if (timeRangeSelect) {
+    timeRangeSelect.addEventListener("change", function () {
+      customTimeDiv.style.display = this.value === "custom" ? "block" : "none";
+    });
+  }
+
+  // Appliquer les filtres (soumission au serveur)
+  newApplyFiltersBtn.addEventListener("click", function (e) {
+    e.preventDefault();
     console.log("Application des filtres...");
-    const date = document.getElementById("date")?.value;
-    const timeRange = document.getElementById("time-range")?.value;
-    const status = document.getElementById("status")?.value;
-    const service = document.getElementById("service")?.value;
-    const bureau = document.getElementById("bureau")?.value;
-    const employee = document.getElementById("employee")?.value;
-
-    const entryRows = document.querySelectorAll(".entry-row");
-    entryRows.forEach((row) => {
-      const rowDate = row.querySelector("td:nth-child(5)")?.textContent;
-      const rowService = row.querySelector("td:nth-child(3)")?.textContent;
-      const rowBureau = row.querySelector("td:nth-child(4)")?.textContent;
-      const rowEmployee = row.querySelector("td:nth-child(2)")?.textContent;
-
-      const matchesDate = !date || rowDate.includes(date);
-      const matchesService = service === "all" || rowService === service;
-      const matchesBureau = bureau === "all" || rowBureau === bureau;
-      const matchesEmployee =
-        employee === "all" || rowEmployee.includes(employee);
-
-      row.style.display =
-        matchesDate && matchesService && matchesBureau && matchesEmployee
-          ? "table-row"
-          : "none";
-    });
-
-    // Publier un événement pour informer d'autres modules potentiels
-    eventBus.publish("presence:filtered", {
-      date,
-      timeRange,
-      status,
-      service,
-      bureau,
-      employee,
-    });
+    filterForm.submit(); // Soumettre le formulaire au serveur
+    eventBus.publish("presence:filtered", getFilterValues());
   });
 
   // Réinitialiser les filtres
   newResetFiltersBtn.addEventListener("click", function () {
     console.log("Réinitialisation des filtres...");
-
+    filterForm.reset();
     if (document.getElementById("date"))
-      document.getElementById("date").value = "2025-04-05";
-    if (document.getElementById("time-range"))
-      document.getElementById("time-range").value = "all";
+      document.getElementById("date").value = "";
+    if (timeRangeSelect) timeRangeSelect.value = "all";
+    if (customTimeDiv) customTimeDiv.style.display = "none";
     if (document.getElementById("status"))
       document.getElementById("status").value = "all";
     if (document.getElementById("service"))
       document.getElementById("service").value = "all";
-    if (document.getElementById("bureau"))
+    if (document.getElementById("bureau")) {
       document.getElementById("bureau").value = "all";
-    if (document.getElementById("employee"))
+      document.getElementById("bureau").disabled = true;
+    }
+    if (document.getElementById("employee")) {
       document.getElementById("employee").value = "all";
-
-    const entryRows = document.querySelectorAll(".entry-row");
-    entryRows.forEach((row) => (row.style.display = "table-row"));
-
-    // Publier un événement pour informer d'autres modules potentiels
+      document.getElementById("employee").disabled = true;
+    }
+    filterForm.submit(); // Soumettre pour recharger avec les valeurs par défaut
     eventBus.publish("presence:filtersReset", {});
   });
+}
+
+// Gestion des dépendances entre Service, Bureau et Employé
+function setupDependencies() {
+  const serviceSelect = document.getElementById("service");
+  const bureauSelect = document.getElementById("bureau");
+  const employeeSelect = document.getElementById("employee");
+
+  if (!serviceSelect || !bureauSelect || !employeeSelect) return;
+
+  // Désactiver par défaut
+  bureauSelect.disabled = true;
+  employeeSelect.disabled = true;
+
+  // Mise à jour des bureaux en fonction du service
+  serviceSelect.addEventListener("change", function () {
+    const selectedService = this.value;
+    bureauSelect.innerHTML = '<option value="all">Tous les bureaux</option>';
+    employeeSelect.innerHTML = '<option value="all">Tous les employés</option>';
+    bureauSelect.disabled = selectedService === "all";
+    employeeSelect.disabled = true;
+
+    if (selectedService !== "all") {
+      fetch(`fetch_bureaux.php?service=${encodeURIComponent(selectedService)}`)
+        .then((response) => response.json())
+        .then((data) => {
+          data.forEach((bureau) => {
+            const option = document.createElement("option");
+            option.value = bureau.libele;
+            option.textContent = bureau.libele;
+            bureauSelect.appendChild(option);
+          });
+        })
+        .catch((error) => console.error("Erreur lors du chargement des bureaux :", error));
+    }
+  });
+
+  // Mise à jour des employés en fonction du bureau
+  bureauSelect.addEventListener("change", function () {
+    const selectedBureau = this.value;
+    employeeSelect.innerHTML = '<option value="all">Tous les employés</option>';
+    employeeSelect.disabled = selectedBureau === "all";
+
+    if (selectedBureau !== "all") {
+      fetch(`fetch_agents.php?bureau=${encodeURIComponent(selectedBureau)}`)
+        .then((response) => response.json())
+        .then((data) => {
+          data.forEach((agent) => {
+            const option = document.createElement("option");
+            option.value = agent.nom_prenom;
+            option.textContent = agent.nom_prenom;
+            employeeSelect.appendChild(option);
+          });
+        })
+        .catch((error) => console.error("Erreur lors du chargement des employés :", error));
+    }
+  });
+}
+
+// Fonction pour récupérer les valeurs des filtres
+function getFilterValues() {
+  return {
+    date: document.getElementById("date")?.value,
+    timeRange: document.getElementById("time-range")?.value,
+    status: document.getElementById("status")?.value,
+    service: document.getElementById("service")?.value,
+    bureau: document.getElementById("bureau")?.value,
+    employee: document.getElementById("employee")?.value,
+  };
 }
 
 // Fonction pour mettre à jour les styles des boutons
