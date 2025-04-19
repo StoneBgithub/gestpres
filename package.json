@@ -16,6 +16,8 @@
     "tailwindcss": "^3.4.17"
   },
   "dependencies": {
-    "chart.js": "^4.4.8"
+    "chart.js": "^4.4.8",
+    "jspdf": "^3.0.1",
+    "qrcode": "^1.5.4"
   }
 }

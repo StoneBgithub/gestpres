@@ -33,7 +33,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($stmt->rowCount() > 0) {
                 $user = $stmt->fetch();
                 
-                // Vérifier le mot de passe (dans un environnement réel, utilisez password_verify avec des hash)
+                // Vérifier le mot de passe (non haché, comme demandé)
                 if ($password === $user['mot_de_passe']) {
                     // Authentification réussie - Créer la session
                     $_SESSION['user_id'] = $user['id'];
@@ -42,8 +42,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $_SESSION['user_matricule'] = $user['matricule'];
                     $_SESSION['is_logged_in'] = true;
                     
-                    // Rediriger vers le tableau de bord
-                    header("Location: dashboard.php");
+                    // Vérifier si l'utilisateur vient de scan_presence.php
+                    if (isset($_GET['from']) && $_GET['from'] === 'scan') {
+                        header("Location: scan-presence.php");
+                    } else {
+                        header("Location: dashboard.php");
+                    }
                     exit();
                 } else {
                     $error = "Mot de passe incorrect.";
@@ -91,7 +95,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
                 <?php endif; ?>
                 
-                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
+                <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]) . (isset($_GET['from']) ? '?from=' . htmlspecialchars($_GET['from']) : ''); ?>" method="post">
                     <div class="mb-6">
                         <label for="email" class="block text-gray-700 text-sm font-bold mb-2">Email professionnel</label>
                         <input type="email" id="email" name="email" 

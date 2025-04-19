@@ -1,4 +1,5 @@
 <?php
+// fichier dashboard.php
 // Démarrer la session en début de fichier
 session_start();
 
@@ -32,7 +33,9 @@ if ($isAjax) {
     <title>DSI - Tableau de Bord</title>
     <link href="./assets/css/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="./assets/css/all.min.css" rel="stylesheet">
+    <link href="./assets/css/poppins.css" rel="stylesheet">
+   
     <style>
         body { font-family: 'Poppins', sans-serif; background-color: #f8fafc; }
         .gradient-bg { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
@@ -62,15 +65,45 @@ if ($isAjax) {
                         ?>
                     </h1>
                     <div class="flex items-center space-x-4">
-                        <button class="text-gray-500 hover:text-gray-700 focus:outline-none">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                            </svg>
-                        </button>
+                        <?php
+                        // Inclure la connexion à la base de données
+                        require_once 'db_connect.php';
+
+                        // Récupérer les informations de l'utilisateur connecté
+                        $user_id = $_SESSION['user_id'];
+                        $stmt = $pdo->prepare("
+                            SELECT a.nom, a.prenom, a.photo, l.role 
+                            FROM agent a 
+                            INNER JOIN login l ON a.id = l.agent_id 
+                            WHERE a.id = :user_id
+                        ");
+                        $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
+                        $stmt->execute();
+                        $user = $stmt->fetch();
+
+                        // Vérifier si l'utilisateur existe
+                        if ($user) {
+                            // Déterminer l'image à afficher
+                            if (!empty($user['photo']) && file_exists('./Uploads/' . $user['photo'])) {
+                                // Si une photo existe, utiliser le chemin relatif depuis le dossier d'Uploads
+                                $profile_image = './Uploads/' . htmlspecialchars($user['photo']);
+                            } else {
+                                // Générer les initiales pour l'avatar
+                                $initials = strtoupper(substr($user['nom'], 0, 1) . substr($user['prenom'], 0, 1));
+                                // Créer un avatar avec le même style que agents_content.php et un padding interne accru
+                                $profile_image = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' fill='%23e0e7ff' rx='18'/%3E%3Ctext x='50%' y='50%' dy='.3em' text-anchor='middle' fill='%233b82f6' font-family='Poppins, sans-serif' font-size='14' font-weight='500'%3E" . htmlspecialchars($initials) . "%3C/text%3E%3C/svg%3E";
+                            }
+                        ?>
                         <div class="flex items-center">
-                            <img src="https://randomuser.me/api/portraits/men/1.jpg" alt="Photo de profil" class="h-8 w-8 rounded-full">
-                            <span class="ml-2 text-gray-700 font-medium">Admin DSI</span>
+                            <img src="<?php echo $profile_image; ?>" alt="Photo de profil" class="h-9 w-9 rounded-full object-cover">
+                            <span class="ml-2 text-gray-700 font-medium"><?php echo htmlspecialchars(ucfirst($user['role'])); ?></span>
                         </div>
+                        <?php
+                        } else {
+                            // Gestion d'erreur si l'utilisateur n'est pas trouvé
+                            echo '<span class="ml-2 text-red-700 font-medium">Utilisateur non trouvé</span>';
+                        }
+                        ?>
                     </div>
                 </div>
             </header>
@@ -89,7 +122,7 @@ if ($isAjax) {
             </main>
         </div>
     </div>
-
+    <script src="./assets/js/qrcode.min.js"></script>
     <!-- Charger le point d'entrée de l'application -->
     <script type="module" src="./js/app.js"></script>
 </body>

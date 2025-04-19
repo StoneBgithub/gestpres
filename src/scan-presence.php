@@ -1,3 +1,7 @@
+<?php
+session_start();
+$isLoggedIn = isset($_SESSION['is_logged_in']) && $_SESSION['is_logged_in'] === true;
+?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -193,25 +197,24 @@
             justify-content: center;
             margin-bottom: 20px;
         }
-        .method-tab { /* Corrigé la typo .method/tab -> .method-tab */
+        .method-tab {
             padding: 8px 20px;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 500;
             margin: 0 5px;
             transition: all 0.3s ease;
-            background-color: #e5e7eb; /* Gris clair initial */
-            color: #4b5563; /* Texte gris foncé initial */
+            background-color: #e5e7eb;
+            color: #4b5563;
         }
         .method-tab.active {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); /* Gradient bleu initial */
-            color: white; /* Texte blanc */
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* Ombre initiale */
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
         .method-tab:hover:not(.active) {
-            background-color: #d1d5db; /* Gris plus foncé au survol */
+            background-color: #d1d5db;
         }
-        /* Conservation des styles du conteneur actuel */
         .method-container {
             max-width: 600px;
             margin: 0 auto;
@@ -248,14 +251,12 @@
                     </svg>
                     <span class="text-xl font-bold">DSI - Gestion de Présence</span>
                 </a>
-                <div class="flex items-center">
-                    <div class="text-right">
-                        <div class="text-sm opacity-75">
-                            <span id="current-date">Chargement de la date...</span>
-                        </div>
-                        <div class="text-2xl font-bold">
-                            <span id="current-time">00:00:00</span>
-                        </div>
+                <div class="text-right">
+                    <div class="text-sm opacity-75">
+                        <span id="current-date">Chargement de la date...</span>
+                    </div>
+                    <div class="text-2xl font-bold">
+                        <span id="current-time">00:00:00</span>
                     </div>
                 </div>
             </div>
@@ -276,12 +277,21 @@
                     </svg>
                     Scanner QR
                 </div>
+                <?php if ($isLoggedIn): ?>
                 <div id="tab-manual" class="method-tab" onclick="switchMethod('manual')">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
                     </svg>
                     Matricule
                 </div>
+                <?php else: ?>
+                <a href="login.php?from=scan" class="method-tab">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                    </svg>
+                    Matricule
+                </a>
+                <?php endif; ?>
             </div>
 
             <div id="qr-container" class="method-container bg-white rounded-3xl shadow-xl p-6 md:p-8">
@@ -353,6 +363,12 @@
                         </svg>
                     </button>
                 </form>
+
+                <?php if ($isLoggedIn): ?>
+                <div class="text-center mt-4">
+                    <a href="logout.php" class="text-red-600 hover:text-red-800 font-medium transition-colors">Se déconnecter</a>
+                </div>
+                <?php endif; ?>
             </div>
 
             <div class="text-center mt-8">
@@ -455,6 +471,13 @@
         setInterval(updateDateTime, 1000);
 
         function switchMethod(method) {
+            <?php if (!$isLoggedIn): ?>
+            if (method === 'manual') {
+                window.location.href = 'login.php?from=scan';
+                return;
+            }
+            <?php endif; ?>
+
             if (isScanning && method !== currentMethod && currentMethod === 'qr') {
                 stopQRScanner();
             }
@@ -462,7 +485,9 @@
             currentMethod = method;
             
             document.getElementById('tab-qr').classList.toggle('active', method === 'qr');
+            <?php if ($isLoggedIn): ?>
             document.getElementById('tab-manual').classList.toggle('active', method === 'manual');
+            <?php endif; ?>
             
             const qrContainer = document.getElementById('qr-container');
             const manualContainer = document.getElementById('manual-container');
@@ -575,12 +600,11 @@
                     // Gestion de la photo de l'agent
                     const agentPhoto = document.getElementById('agent-photo');
                     if (data.agent.photo && data.agent.photo !== null) {
-                        agentPhoto.src = data.agent.photo; // Chemin relatif de la photo stockée
+                        agentPhoto.src = data.agent.photo;
                     } else {
-                        agentPhoto.src = 'https://i.pravatar.cc/150?img=10'; // Photo par défaut si aucune photo n'est disponible
+                        agentPhoto.src = 'https://i.pravatar.cc/150?img=10';
                     }
                     
-                    // Effacer le champ matricule uniquement si la méthode est "manual"
                     if (currentMethod === 'manual') {
                         document.getElementById('matricule').value = '';
                     }
