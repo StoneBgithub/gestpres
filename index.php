@@ -419,24 +419,23 @@ if (isLoggedIn()) {
         </div>
     </section>
 
-<!-- Footer avec noir intense et contraste amélioré -->
-<footer class="bg-black text-white py-12">
+<footer class="text-white py-12" style="background-color: #000D08;">
     <div class="container mx-auto px-6">
         <div class="flex flex-col md:flex-row justify-between items-center">
             <div class="mb-6 md:mb-0">
                 <h2 class="text-2xl font-bold font-display text-white">DSI - Gestion de Présence</h2>
-                <p class="text-gray-300 mt-2">Solution développée pour la Direction des Systèmes d'Information</p>
+                <p class="text-gray-200 mt-2">Solution développée pour la Direction des Systèmes d'Information</p>
             </div>
             <div class="flex space-x-6">
-                <a href="#" class="text-congo-yellow hover:text-white hover:underline text-lg font-medium">Aide</a>
-                <a href="#" class="text-congo-yellow hover:text-white hover:underline text-lg font-medium">Contact</a>
-                <a href="#" class="text-congo-yellow hover:text-white hover:underline text-lg font-medium">Mentions légales</a>
+                <a href="#" style="color: #F2CE16;" class="hover:text-white hover:underline text-lg font-medium">Aide</a>
+                <a href="#" style="color: #F2CE16;" class="hover:text-white hover:underline text-lg font-medium">Contact</a>
+                <a href="#" style="color: #F2CE16;" class="hover:text-white hover:underline text-lg font-medium">Mentions légales</a>
             </div>
         </div>
-        <hr class="border-congo-green border-opacity-70 my-8">
+        <hr style="border-color: #038C33; opacity: 0.7;" class="my-8">
         <div class="text-center">
             <p class="text-white text-lg font-medium">© <?php echo date('Y'); ?> Direction des Systèmes d'Information</p>
-            <p class="text-congo-yellow mt-2 font-medium">République du Congo - Brazzaville</p>
+            <p style="color: #F2CE16;" class="mt-2 font-medium">République du Congo - Brazzaville</p>
         </div>
     </div>
 </footer>
