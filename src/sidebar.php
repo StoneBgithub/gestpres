@@ -31,6 +31,10 @@
                         'title' => 'Gestion de Présence',
                         'icon' => 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'
                     ],
+                   'performance_content' => [
+                        'title' => 'Performance Agents',
+                        'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+                    ],
                 ];
 
                 foreach ($menu_items as $page_name => $item) {
@@ -49,14 +53,14 @@
             </ul>
         </nav>
         
-       <!-- Sidebar Footer -->
-<div class="p-4 mt-auto border-t border-gray-200">
-    <a href="logout.php" class="flex items-center text-red-600 hover:bg-red-100 hover:text-red-800 transition-all duration-300 rounded-xl px-4 py-3 card-shine">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-        </svg>
-        <span class="font-medium font-body">Déconnexion</span>
-    </a>
-</div>
+        <!-- Sidebar Footer -->
+        <div class="p-4 mt-auto border-t border-gray-200">
+            <a href="logout.php" class="flex items-center text-red-600 hover:bg-red-100 hover:text-red-800 transition-all duration-300 rounded-xl px-4 py-3 card-shine">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span class="font-medium font-body">Déconnexion</span>
+            </a>
+        </div>
     </div>
 </aside>

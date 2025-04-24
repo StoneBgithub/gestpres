@@ -414,7 +414,7 @@ if (isLoggedIn()) {
                             <p class="mt-4 text-sm text-ui-text-muted">Aucune connexion requise pour le personnel</p>
                         </div>
                     </div>
-               b    </div>
+                   </div>
             </div>
         </div>
     </section>

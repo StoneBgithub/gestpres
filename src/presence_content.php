@@ -138,10 +138,10 @@ $agents = $agentsStmt->fetchAll(PDO::FETCH_ASSOC);
             <button id="toggle-arrivals" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition" data-type="arrivée">Arrivées</button>
             <button id="toggle-departures" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition" data-type="depart">Départs</button>
             <div class="relative flex items-center">
-                <a href="#" id="toggle-filters-btn" class="px-3 py-1.5 bg-white border border-gray-200 text-blue-600 rounded-lg text-sm font-medium hover:bg-gray-50 transition flex items-center">
+                <a href="#" id="toggle-filters-btn" class="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-congo-yellow-pale hover:text-congo-green-dark transition flex items-center">
                     Filtres avancés
                 </a>
-                <span id="filter-indicator" class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-blue-600 text-white shadow-sm transition-all duration-300 <?php echo $filtersApplied ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'; ?>">
+                <span id="filter-indicator" class="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gradient-to-tr from-green-600 to-green-900 text-white shadow-sm transition-all duration-300 <?php echo $filtersApplied ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'; ?>">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
@@ -289,7 +289,7 @@ $agents = $agentsStmt->fetchAll(PDO::FETCH_ASSOC);
                 <input type="hidden" name="bureau" value="<?php echo htmlspecialchars($bureau); ?>">
                 <input type="hidden" name="employee" value="<?php echo htmlspecialchars($employee); ?>">
                 <input type="hidden" name="type" value="<?php echo htmlspecialchars($type); ?>">
-                <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition">
+                <button type="submit" class="px-4 py-2 bg-gradient-to-tr from-green-600 to-green-900 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition">
                     Exporter en CSV
                 </button>
             </form>

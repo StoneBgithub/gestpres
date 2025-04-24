@@ -15,7 +15,7 @@ $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
 // Si c'est une requête AJAX, ne retourner que le contenu demandé
 if ($isAjax) {
     $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard_content';
-    $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content'];
+    $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content', 'performance_content'];
     if (in_array($page, $valid_pages)) {
         include $page . '.php';
     } else {
@@ -32,7 +32,7 @@ if ($isAjax) {
     <title>DSI - Tableau de Bord</title>
     <link href="./assets/css/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-   <link rel="stylesheet" href="./assets/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="./assets/fontawesome/css/all.min.css">
     <style>
         body { 
             font-family: 'Inter', sans-serif; 
@@ -139,9 +139,10 @@ if ($isAjax) {
                         $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard_content';
                         $menu_items = [
                             'dashboard_content' => 'Tableau de Bord',
-                            'agents_content' => 'Gestion des Présences', // Updated title
-                            'presence_content' => 'Historique des Présences',
-                            'absences_content' => 'Gestion d\'Absence'
+                            'agents_content' => 'Gestion des Agents',
+                            'presence_content' => 'Gestion de Présence',
+                            'absences_content' => 'Gestion d\'Absence',
+                            'performance_content' => 'Performance des Agents',
                         ];
                         echo isset($menu_items[$page]) ? $menu_items[$page] : ucfirst(str_replace('_content', '', $page));
                         ?>
@@ -180,7 +181,7 @@ if ($isAjax) {
             <main class="p-6 content-transition" id="main-content">
                 <?php
                 $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard_content';
-                $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content'];
+                $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content', 'performance_content'];
                 if (in_array($page, $valid_pages)) {
                     include $page . '.php';
                 } else {

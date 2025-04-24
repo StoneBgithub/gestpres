@@ -15,6 +15,7 @@ export const pageTitles = {
   agents_content: "Gestion des Agents",
   presence_content: "Gestion de Présence",
   absences_content: "Gestion d'Absence",
+  performance_content: "Performance des Agents",
 };
 
 // Configuration des graphiques
