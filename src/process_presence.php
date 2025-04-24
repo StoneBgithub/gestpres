@@ -15,15 +15,31 @@ try {
     $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    // Récupérer le matricule de la requête POST
-    $matricule = isset($_POST['matricule']) ? $_POST['matricule'] : '';
+    // Récupérer les données de la requête POST
+    $matricule = isset($_POST['matricule']) ? trim($_POST['matricule']) : '';
+    $presenceDate = isset($_POST['presence_date']) ? trim($_POST['presence_date']) : date('Y-m-d');
+    $presenceTime = isset($_POST['presence_time']) ? trim($_POST['presence_time']) : date('H:i:s');
     
     if (empty($matricule)) {
         echo json_encode(['success' => false, 'message' => 'Matricule non fourni']);
         exit;
     }
     
-    // Vérifier si l'agent existe (ajout du champ photo dans la requête)
+    // Valider la date et l'heure si fournies
+    if ($presenceDate !== date('Y-m-d')) {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $presenceDate) || !strtotime($presenceDate)) {
+            echo json_encode(['success' => false, 'message' => 'Format de date invalide']);
+            exit;
+        }
+    }
+    if ($presenceTime !== date('H:i:s')) {
+        if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $presenceTime)) {
+            echo json_encode(['success' => false, 'message' => 'Format d\'heure invalide']);
+            exit;
+        }
+    }
+    
+    // Vérifier si l'agent existe
     $stmtAgent = $conn->prepare("
         SELECT a.id, a.matricule, a.nom, a.prenom, a.photo, b.libele as bureau, s.libele as service
         FROM agent a
@@ -41,25 +57,19 @@ try {
         exit;
     }
     
-    // Récupérer la date actuelle
-    $currentDate = date('Y-m-d');
-    
-    // Vérifier si l'agent a déjà scanné aujourd'hui
+    // Vérifier si l'agent a déjà scanné à la date spécifiée
     $stmtPresence = $conn->prepare("
         SELECT id, type, heure 
         FROM presence 
-        WHERE agent_id = :agent_id AND date = :current_date 
+        WHERE agent_id = :agent_id AND date = :presence_date 
         ORDER BY heure ASC
     ");
     $stmtPresence->bindParam(':agent_id', $agent['id']);
-    $stmtPresence->bindParam(':current_date', $currentDate);
+    $stmtPresence->bindParam(':presence_date', $presenceDate);
     $stmtPresence->execute();
     
     $presences = $stmtPresence->fetchAll(PDO::FETCH_ASSOC);
     $presenceCount = count($presences);
-    
-    // Obtenir l'heure actuelle
-    $currentTime = date('H:i:s');
     
     // Déterminer le type de présence (arrivée ou départ)
     if ($presenceCount == 0) {
@@ -69,10 +79,10 @@ try {
         // Deuxième scan = départ
         $type = 'depart';
     } else {
-        // Déjà fait deux scans aujourd'hui
+        // Déjà fait deux scans à cette date
         echo json_encode([
             'success' => false, 
-            'message' => 'Vous avez déjà enregistré votre arrivée et votre départ pour aujourd\'hui'
+            'message' => 'Vous avez déjà enregistré votre arrivée et votre départ pour cette date'
         ]);
         exit;
     }
@@ -80,15 +90,15 @@ try {
     // Enregistrer la présence
     $stmtInsert = $conn->prepare("
         INSERT INTO presence (agent_id, date, heure, type) 
-        VALUES (:agent_id, :current_date, :current_time, :type)
+        VALUES (:agent_id, :presence_date, :presence_time, :type)
     ");
     $stmtInsert->bindParam(':agent_id', $agent['id']);
-    $stmtInsert->bindParam(':current_date', $currentDate);
-    $stmtInsert->bindParam(':current_time', $currentTime);
+    $stmtInsert->bindParam(':presence_date', $presenceDate);
+    $stmtInsert->bindParam(':presence_time', $presenceTime);
     $stmtInsert->bindParam(':type', $type);
     $stmtInsert->execute();
     
-    // Retourner les données de l'agent et le type d'enregistrement (ajout de la photo)
+    // Retourner les données de l'agent et le type d'enregistrement
     $response = [
         'success' => true,
         'type' => $type,
@@ -97,7 +107,7 @@ try {
             'prenom' => $agent['prenom'],
             'bureau' => $agent['bureau'],
             'service' => $agent['service'],
-            'photo' => $agent['photo'] // Ajout de la photo dans la réponse
+            'photo' => $agent['photo']
         ]
     ];
     

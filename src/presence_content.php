@@ -134,7 +134,7 @@ $agents = $agentsStmt->fetchAll(PDO::FETCH_ASSOC);
     <!-- En-tête avec filtres rapides -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div class="flex flex-wrap gap-2">
-            <button id="toggle-all" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition" data-type="all">Tous</button>
+            <button id="toggle-all" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-gray-200 transition" data-type="all">Tous</button>
             <button id="toggle-arrivals" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition" data-type="arrivée">Arrivées</button>
             <button id="toggle-departures" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200 transition" data-type="depart">Départs</button>
             <div class="relative flex items-center">
@@ -304,7 +304,7 @@ $agents = $agentsStmt->fetchAll(PDO::FETCH_ASSOC);
                         <th class="px-6 py-4">Bureau</th>
                         <th class="px-6 py-4">Date</th>
                         <th class="px-6 py-4">Heure</th>
-                        <th class="px-6 py-4">Statut</th>
+                        <th class="px-6 py-4 w-48">Statut</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -331,20 +331,20 @@ $agents = $agentsStmt->fetchAll(PDO::FETCH_ASSOC);
                             <td class="px-6 py-4"><?php echo htmlspecialchars($presence['bureau']); ?></td>
                             <td class="px-6 py-4"><?php echo date('d/m/Y', strtotime($presence['date'])); ?></td>
                             <td class="px-6 py-4"><?php echo date('H:i', strtotime($presence['heure'])); ?></td>
-                            <td class="px-6 py-4">
+                            <td class="px-6 py-4 min-w-[180px]">
                                 <?php if ($presence['type'] === 'arrivée'): ?>
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $presence['heure'] > '09:00:00' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'; ?>">
-                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap <?php echo $presence['heure'] > '09:00:00' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'; ?>">
+                                        <svg class="w-3.5 h-3.5 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
                                         </svg>
-                                        <?php echo $presence['heure'] > '09:00:00' ? 'Arrivée (Retard)' : 'Arrivée'; ?>
+                                        <span class="truncate"><?php echo $presence['heure'] > '09:00:00' ? 'Arrivée (Retard)' : 'Arrivée'; ?></span>
                                     </span>
                                 <?php else: ?>
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <?php echo $presence['heure'] < '17:00:00' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'; ?>">
-                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap <?php echo $presence['heure'] < '17:00:00' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'; ?>">
+                                        <svg class="w-3.5 h-3.5 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                                         </svg>
-                                        <?php echo $presence['heure'] < '17:00:00' ? 'Départ anticipé' : 'Départ'; ?>
+                                        <span class="truncate"><?php echo $presence['heure'] < '17:00:00' ? 'Départ anticipé' : 'Départ'; ?></span>
                                     </span>
                                 <?php endif; ?>
                             </td>

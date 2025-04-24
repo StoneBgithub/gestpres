@@ -74,13 +74,40 @@ function updatePageTitle(page) {
 }
 
 // Fonction pour mettre à jour l'état actif du menu
+// Fonction pour mettre à jour l'état actif du menu
 function updateActiveMenu(currentPage) {
   const menuLinks = document.querySelectorAll(".sidebar-menu");
-  menuLinks.forEach((link) => link.classList.remove("active-menu"));
+
+  menuLinks.forEach((link) => {
+    // Supprimer toutes les classes d'état actif
+    link.classList.remove(
+      "active-menu",
+      "gradient-bg",
+      "text-white",
+      "font-bold"
+    );
+
+    // Ajouter la classe text-congo-black par défaut
+    link.classList.add("text-congo-black");
+  });
+
+  // Trouver le lien actif
   const activeLink = document.querySelector(
     `.sidebar-menu[data-page="${currentPage}"]`
   );
-  if (activeLink) activeLink.classList.add("active-menu");
+
+  if (activeLink) {
+    // Supprimer la classe text-congo-black
+    activeLink.classList.remove("text-congo-black");
+
+    // Ajouter toutes les classes d'état actif
+    activeLink.classList.add(
+      "active-menu",
+      "gradient-bg",
+      "text-white",
+      "font-bold"
+    );
+  }
 }
 
 // Fonction pour initialiser les événements sur le contenu chargé dynamiquement

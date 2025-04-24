@@ -10,7 +10,7 @@ function sendResponse($data) {
     exit;
 }
 
-// Récupérer les filtres depuis la requête
+// Récup(nbsp;) Récupérer les filtres depuis la requête
 $filters = json_decode(file_get_contents('php://input'), true) ?: [];
 $period = $filters['period'] ?? 'day';
 $year = $filters['year'] ?? date('Y');
@@ -260,26 +260,33 @@ try {
     
     $recent_activities = '';
     if (empty($activities)) {
-        $recent_activities = "<p class='text-gray-500'>Aucune activité pour aujourd'hui.</p>";
+       $recent_activities = "
+    <div class='flex flex-col items-center justify-center py-6 text-center'>
+        <svg class='w-16 h-16 text-gray-300 mb-3' xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'>
+            <path stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'></path>
+        </svg>
+        <h3 class='text-gray-700 font-medium mb-1'>Aucune activité enregistrée</h3>
+        <p class='text-gray-500 text-sm'>Les activités des agents apparaîtront ici dès qu'elles seront disponibles.</p>
+    </div>";
     } else {
         foreach ($activities as $activity) {
             $color = $activity['type'] === 'arrivée' ? 'blue' : 'red';
             $initials = strtoupper(substr($activity['prenom'], 0, 1) . substr($activity['nom'], 0, 1));
             $recent_activities .= "
-                <div class='flex items-center py-2 border-b border-gray-100'>
-                    <div class='w-10 h-10 rounded-full bg-$color-100 flex items-center justify-center mr-3'>
+                <div class='flex items-center py-2 border-b border-gray-100 flex-col sm:flex-row'>
+                    <div class='w-10 h-10 rounded-full bg-$color-100 flex items-center justify-center mb-2 sm:mb-0 sm:mr-3'>
                         <span class='text-$color-600 font-medium'>$initials</span>
                     </div>
-                    <div>
-                        <p class='text-gray-800'>{$activity['prenom']} {$activity['nom']} a enregistré son " . ($activity['type'] === 'arrivée' ? 'arrivée' : 'départ') . "</p>
-                        <p class='text-gray-500 text-sm'>Le {$activity['date']} à {$activity['heure']}</p>
+                    <div class='flex-1 text-center sm:text-left min-w-0'>
+                        <p class='text-gray-800 text-sm truncate'>{$activity['prenom']} {$activity['nom']} a enregistré son " . ($activity['type'] === 'arrivée' ? 'arrivée' : 'départ') . "</p>
+                        <p class='text-gray-500 text-xs'>Le {$activity['date']} à {$activity['heure']}</p>
                     </div>
                 </div>";
         }
     }
 } catch (PDOException $e) {
     error_log("Erreur activités : " . $e->getMessage());
-    $recent_activities = "<p class='text-gray-500'>Erreur lors du chargement des activités.</p>";
+    $recent_activities = "<p class='text-gray-500 text-center'>Erreur lors du chargement des activités.</p>";
 }
 
 // Récupérer les données pour le graphique

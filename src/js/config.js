@@ -21,8 +21,8 @@ export const pageTitles = {
 export const chartConfig = {
   defaultPeriod: "weekly",
   colors: {
-    arrival: "rgba(59, 130, 246, 0.6)", // Bleu
-    departure: "rgba(239, 68, 68, 0.6)", // Rouge
+    arrival: "rgba(59, 130, 246, 0.6)", // Original blue
+    departure: "rgba(239, 68, 68, 0.6)", // Original red
   },
 };
 
@@ -30,13 +30,13 @@ export const chartConfig = {
 export const utils = {
   // Fonction pour activer un bouton et désactiver les autres
   setActiveButton(activeBtn, inactiveBtns) {
-    activeBtn.classList.add("bg-blue-600", "text-white");
+    activeBtn.classList.add("custom-btn", "text-white");
     activeBtn.classList.remove("bg-gray-200", "text-gray-700");
 
     inactiveBtns.forEach((btn) => {
       if (btn) {
         btn.classList.add("bg-gray-200", "text-gray-700");
-        btn.classList.remove("bg-blue-600", "text-white");
+        btn.classList.remove("custom-btn", "text-white");
       }
     });
   },
@@ -62,7 +62,6 @@ export const utils = {
 export const eventBus = {
   events: {},
 
-  // S'abonner à un événement
   subscribe(event, callback) {
     if (!this.events[event]) {
       this.events[event] = [];
@@ -71,21 +70,18 @@ export const eventBus = {
     return () => this.unsubscribe(event, callback);
   },
 
-  // Se désabonner d'un événement
   unsubscribe(event, callback) {
     if (this.events[event]) {
       this.events[event] = this.events[event].filter((cb) => cb !== callback);
     }
   },
 
-  // Déclencher un événement
   publish(event, data) {
     if (this.events[event]) {
       this.events[event].forEach((callback) => callback(data));
     }
   },
 
-  // Nettoyer tous les abonnements
   clear(event) {
     if (event) {
       delete this.events[event];

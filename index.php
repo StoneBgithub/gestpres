@@ -414,17 +414,21 @@ if (isLoggedIn()) {
                             <p class="mt-4 text-sm text-ui-text-muted">Aucune connexion requise pour le personnel</p>
                         </div>
                     </div>
-                </div>
+               b    </div>
             </div>
         </div>
     </section>
 
-<footer class="text-white py-12" style="background-color: #000D08;">
+<footer class="text-white py-12" style="background-color: #011F12;">
     <div class="container mx-auto px-6">
         <div class="flex flex-col md:flex-row justify-between items-center">
-            <div class="mb-6 md:mb-0">
-                <h2 class="text-2xl font-bold font-display text-white">DSI - Gestion de Présence</h2>
-                <p class="text-gray-200 mt-2">Solution développée pour la Direction des Systèmes d'Information</p>
+            <div class="mb-6 md:mb-0 flex items-center">
+                <!-- Logo ajouté ici -->
+                <img src="./src/public/logo.svg" alt="Logo" class="h-16 w-16 mr-4">
+                <div>
+                    <h2 class="text-2xl font-bold font-display text-white">DSI - Gestion de Présence</h2>
+                    <p class="text-gray-200 mt-2">Solution développée pour la Direction des Systèmes d'Information</p>
+                </div>
             </div>
             <div class="flex space-x-6">
                 <a href="#" style="color: #F2CE16;" class="hover:text-white hover:underline text-lg font-medium">Aide</a>
@@ -433,13 +437,12 @@ if (isLoggedIn()) {
             </div>
         </div>
         <hr style="border-color: #038C33; opacity: 0.7;" class="my-8">
-        <div class="text-center">
+        <div class="text-center flex flex-col items-center">
             <p class="text-white text-lg font-medium">© <?php echo date('Y'); ?> Direction des Systèmes d'Information</p>
             <p style="color: #F2CE16;" class="mt-2 font-medium">République du Congo - Brazzaville</p>
         </div>
     </div>
 </footer>
-
     <script>
         // Script pour l'animation du défilement doux
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {

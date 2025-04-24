@@ -96,7 +96,7 @@ function createPresenceChart(data = null) {
       {
         label: "Présents",
         data: [],
-        backgroundColor: "rgba(59, 130, 246, 0.2)",
+        backgroundColor: "rgba(59, 130, 246, 0.2)", // Original blue
         borderColor: "rgba(59, 130, 246, 1)",
         borderWidth: 2,
         tension: 0.4,
@@ -105,7 +105,7 @@ function createPresenceChart(data = null) {
       {
         label: "Absents",
         data: [],
-        backgroundColor: "rgba(239, 68, 68, 0.2)",
+        backgroundColor: "rgba(239, 68, 68, 0.2)", // Original red
         borderColor: "rgba(239, 68, 68, 1)",
         borderWidth: 2,
         tension: 0.4,
@@ -114,8 +114,7 @@ function createPresenceChart(data = null) {
       {
         label: "En retard",
         data: [],
-        backgroundColor: "rgba(245, 158, 11, 0.2)",
-        borderColor: "rgba(245, 158, 11, 1)",
+        backgroundColor: "rgba(245, 158, 11, 0.2)", // Original amber
         borderWidth: 2,
         tension: 0.4,
         fill: true,
@@ -130,7 +129,7 @@ function createPresenceChart(data = null) {
   }
 
   const config = {
-    type: "line",
+    type: "bar",
     data: chartData,
     options: {
       responsive: true,
@@ -161,7 +160,7 @@ function createPresenceTrackingChart(data = null) {
       {
         label: "Présents",
         data: [],
-        backgroundColor: "rgba(59, 130, 246, 0.2)",
+        backgroundColor: "rgba(59, 130, 246, 0.2)", // Original blue
         borderColor: "rgba(59, 130, 246, 1)",
         borderWidth: 2,
         tension: 0.4,
@@ -170,7 +169,7 @@ function createPresenceTrackingChart(data = null) {
       {
         label: "Absents",
         data: [],
-        backgroundColor: "rgba(239, 68, 68, 0.2)",
+        backgroundColor: "rgba(239, 68, 68, 0.2)", // Original red
         borderColor: "rgba(239, 68, 68, 1)",
         borderWidth: 2,
         tension: 0.4,
@@ -179,7 +178,7 @@ function createPresenceTrackingChart(data = null) {
       {
         label: "En retard",
         data: [],
-        backgroundColor: "rgba(245, 158, 11, 0.2)",
+        backgroundColor: "rgba(245, 158, 11, 0.2)", // Original amber
         borderColor: "rgba(245, 158, 11, 1)",
         borderWidth: 2,
         tension: 0.4,
@@ -362,7 +361,6 @@ function setupFilters() {
   }
 
   if (toggleFiltersBtn && advancedFilters) {
-    // Cloner le bouton pour supprimer tout écouteur existant
     const newToggleFiltersBtn = toggleFiltersBtn.cloneNode(true);
     toggleFiltersBtn.replaceWith(newToggleFiltersBtn);
 
@@ -513,7 +511,7 @@ function updateDashboard(filters = { period: "day" }, updateChartFlag = false) {
               {
                 label: "Présents",
                 data: data.chart_data.present,
-                backgroundColor: "rgba(59, 130, 246, 0.2)",
+                backgroundColor: "rgba(59, 130, 246, 0.2)", // Original blue
                 borderColor: "rgba(59, 130, 246, 1)",
                 borderWidth: 2,
                 tension: 0.4,
@@ -522,7 +520,7 @@ function updateDashboard(filters = { period: "day" }, updateChartFlag = false) {
               {
                 label: "Absents",
                 data: data.chart_data.absent,
-                backgroundColor: "rgba(239, 68, 68, 0.2)",
+                backgroundColor: "rgba(239, 68, 68, 0.2)", // Original red
                 borderColor: "rgba(239, 68, 68, 1)",
                 borderWidth: 2,
                 tension: 0.4,
@@ -531,7 +529,7 @@ function updateDashboard(filters = { period: "day" }, updateChartFlag = false) {
               {
                 label: "En retard",
                 data: data.chart_data.late,
-                backgroundColor: "rgba(245, 158, 11, 0.2)",
+                backgroundColor: "rgba(245, 158, 11, 0.2)", // Original amber
                 borderColor: "rgba(245, 158, 11, 1)",
                 borderWidth: 2,
                 tension: 0.4,
@@ -563,8 +561,8 @@ function resetDashboardDisplay() {
   document.getElementById("recent-activities").innerHTML = `
     <div class="flex flex-col items-center justify-center p-6 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl shadow-sm animate-fade-in">
       <i class="fas fa-history text-4xl text-indigo-500 mb-4 animate-pulse"></i>
-      <h3 class="text-lg font-semibold text-gray-800 mb-2">Aucune activité récente</h3>
-      <p class="text-sm text-gray-600 text-center">Changez la période ou les filtres pour voir les activités.</p>
+      <h3 class="text-lg font-semibold text-gray-800 mb-2 font-display">Aucune activité récente</h3>
+      <p class="text-sm text-gray-600 text-center font-body">Changez la période ou les filtres pour voir les activités.</p>
     </div>
   `;
   createPresenceChart();
