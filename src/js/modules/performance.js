@@ -152,6 +152,11 @@ export function init() {
           agentsRanking.innerHTML =
             '<tr><td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">Aucun agent trouvé</td></tr>';
         } else {
+          // Modification de la partie du code où les rangs sont générés
+
+          // Correction du code JavaScript pour le classement des agents et autres styles
+
+          // Partie pour la génération du classement des agents
           data.agents.forEach((agent, index) => {
             const rank = (page - 1) * 10 + index + 1;
             const presenceRate = Math.round(agent.presence_rate);
@@ -171,63 +176,120 @@ export function init() {
               0
             )}`.toUpperCase();
 
+            // Définir des couleurs distinctes pour les rangs
+            let rankBgColor;
+            if (rank === 1) {
+              // Couleur dorée
+              rankBgColor = "bg-yellow-400";
+            } else if (rank === 2) {
+              // Argent
+              rankBgColor = "bg-gray-300";
+            } else if (rank === 3) {
+              // Bronze
+              rankBgColor = "bg-orange-700";
+            } else {
+              rankBgColor = "bg-gray-200";
+            }
+
             agentsRanking.innerHTML += `
-                            <tr class="hover:bg-gray-50 transition-all">
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center justify-center w-8 h-8 rounded-full ${
-                                      rank === 1
-                                        ? "bg-yellow-500"
-                                        : rank === 2
-                                        ? "bg-gray-300"
-                                        : rank === 3
-                                        ? "bg-orange-500"
-                                        : "bg-gray-200"
-                                    } text-${
-              rank <= 3 ? "white" : "gray-800"
-            } font-bold">${rank}</div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        <div class="flex-shrink-0 h-10 w-10">
-                                            <div class="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold">
-                                                ${initials}
-                                            </div>
-                                        </div>
-                                        <div class="ml-4">
-                                            <div class="text-sm font-medium text-gray-900">${
-                                              agent.nom
-                                            } ${agent.prenom}</div>
-                                            <div class="text-sm text-gray-500">${
-                                              agent.email || "-"
-                                            }</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${
-                                  agent.bureau || "-"
-                                }</td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${
-                                  agent.service || "-"
-                                }</td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-900 font-medium">${Math.round(
-                                      agent.total_hours
-                                    )} h</div>
-                                    <div class="text-xs text-gray-500">+${Math.round(
-                                      agent.overtime_hours
-                                    )} h supp.</div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        <div class="text-sm font-medium text-gray-900 mr-2">${presenceRate}%</div>
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${badgeClass} text-white">
-                                            ${badgeText}
-                                        </span>
-                                    </div>
-                                </td>
-                            </tr>
-                        `;
+    <tr class="hover:bg-gray-50 transition-all">
+      <td class="px-4 py-3 whitespace-nowrap">
+        <div class="flex items-center justify-center w-8 h-8 rounded-full ${rankBgColor} text-white font-bold shadow-sm">
+          ${rank}
+        </div>
+      </td>
+      <td class="px-4 py-3 whitespace-nowrap">
+        <div class="flex items-center">
+          <div class="flex-shrink-0 h-10 w-10">
+            <div class="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold">
+              ${initials}
+            </div>
+          </div>
+          <div class="ml-4">
+            <div class="text-sm font-medium text-gray-900">${agent.nom} ${
+              agent.prenom
+            }</div>
+            <div class="text-sm text-gray-500">${agent.email || "-"}</div>
+          </div>
+        </div>
+      </td>
+      <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${
+        agent.bureau || "-"
+      }</td>
+      <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${
+        agent.service || "-"
+      }</td>
+      <td class="px-4 py-3 whitespace-nowrap">
+        <div class="text-sm text-gray-900 font-medium">${Math.round(
+          agent.total_hours
+        )} h</div>
+        <div class="text-xs text-gray-500">+${Math.round(
+          agent.overtime_hours
+        )} h supp.</div>
+      </td>
+      <td class="px-4 py-3 whitespace-nowrap">
+        <div class="flex items-center">
+          <div class="text-sm font-medium text-gray-900 mr-2">${presenceRate}%</div>
+          <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${badgeClass} text-white">
+            ${badgeText}
+          </span>
+        </div>
+      </td>
+    </tr>
+  `;
           });
+
+          // Pour les statistiques globales, on utilise le code d'origine
+          globalStats.innerHTML = `
+  <div class="bg-gray-50 p-4 rounded-lg shadow-sm border-l-4 border-congo-green">
+      <div class="flex justify-between items-center">
+          <div>
+              <p class="text-sm font-medium text-gray-500">Heures totales travaillées</p>
+              <p class="text-2xl font-bold text-congo-green">${data.stats.total_hours} h</p>
+          </div>
+          <div class="rounded-full bg-congo-green-light p-3">
+              <i class="fas fa-clock text-congo-green text-xl"></i>
+          </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">Basé sur la période sélectionnée</p>
+  </div>
+  <div class="bg-gray-50 p-4 rounded-lg shadow-sm border-l-4 border-congo-green">
+      <div class="flex justify-between items-center">
+          <div>
+              <p class="text-sm font-medium text-gray-500">Taux de présence moyen</p>
+              <p class="text-2xl font-bold text-congo-green">${data.stats.avg_attendance_rate}%</p>
+          </div>
+          <div class="rounded-full bg-congo-green-light p-3">
+              <i class="fas fa-user-check text-congo-green text-xl"></i>
+          </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">Basé sur les jours ouvrables</p>
+  </div>
+  <div class="bg-gray-50 p-4 rounded-lg shadow-sm border-l-4 border-congo-green">
+      <div class="flex justify-between items-center">
+          <div>
+              <p class="text-sm font-medium text-gray-500">Heures supplémentaires</p>
+              <p class="text-2xl font-bold text-congo-green">${data.stats.total_overtime} h</p>
+          </div>
+          <div class="rounded-full bg-congo-green-light p-3">
+              <i class="fas fa-hourglass-half text-congo-green text-xl"></i>
+          </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">Après 14h</p>
+  </div>
+  <div class="bg-gray-50 p-4 rounded-lg shadow-sm border-l-4 border-congo-green">
+      <div class="flex justify-between items-center">
+          <div>
+              <p class="text-sm font-medium text-gray-500">Agents à 100% de présence</p>
+              <p class="text-2xl font-bold text-congo-green">${data.stats.perfect_attendance}</p>
+          </div>
+          <div class="rounded-full bg-congo-green-light p-3">
+              <i class="fas fa-medal text-congo-green text-xl"></i>
+          </div>
+      </div>
+      <p class="text-xs text-gray-500 mt-2">Présence complète</p>
+  </div>
+`;
         }
 
         // Mettre à jour la pagination
