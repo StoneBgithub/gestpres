@@ -17,6 +17,12 @@ export function init() {
 
   let currentPage = 1;
 
+  // Fonction pour tronquer un texte et ajouter des points de suspension
+  function truncateText(text, maxLength = 15) {
+    if (!text) return "-";
+    return text.length > maxLength ? text.substring(0, maxLength) + "..." : text;
+  }
+
   // Charger les services
   fetch("fetch_services.php")
     .then((response) => {
@@ -94,68 +100,13 @@ export function init() {
       })
       .then((data) => {
         console.log("Données reçues de fetch_performances.php :", data); // Log pour déboguer
-        // ... reste du code inchangé ...
-        globalStats.innerHTML = `
-                    <div class="bg-gray-50 p-4 rounded-lg shadow-sm border-l-4 border-congo-green">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <p class="text-sm font-medium text-gray-500">Heures totales travaillées</p>
-                                <p class="text-2xl font-bold text-congo-green">${data.stats.total_hours} h</p>
-                            </div>
-                            <div class="rounded-full bg-congo-green-light p-3">
-                                <i class="fas fa-clock text-congo-green text-xl"></i>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-2">Basé sur la période sélectionnée</p>
-                    </div>
-                    <div class="bg-gray-50 p-4 rounded-lg shadow-sm border-l-4 border-congo-green">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <p class="text-sm font-medium text-gray-500">Taux de présence moyen</p>
-                                <p class="text-2xl font-bold text-congo-green">${data.stats.avg_attendance_rate}%</p>
-                            </div>
-                            <div class="rounded-full bg-congo-green-light p-3">
-                                <i class="fas fa-user-check text-congo-green text-xl"></i>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-2">Basé sur les jours ouvrables</p>
-                    </div>
-                    <div class="bg-gray-50 p-4 rounded-lg shadow-sm border-l-4 border-congo-green">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <p class="text-sm font-medium text-gray-500">Heures supplémentaires</p>
-                                <p class="text-2xl font-bold text-congo-green">${data.stats.total_overtime} h</p>
-                            </div>
-                            <div class="rounded-full bg-congo-green-light p-3">
-                                <i class="fas fa-hourglass-half text-congo-green text-xl"></i>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-2">Après 14h</p>
-                    </div>
-                    <div class="bg-gray-50 p-4 rounded-lg shadow-sm border-l-4 border-congo-green">
-                        <div class="flex justify-between items-center">
-                            <div>
-                                <p class="text-sm font-medium text-gray-500">Agents à 100% de présence</p>
-                                <p class="text-2xl font-bold text-congo-green">${data.stats.perfect_attendance}</p>
-                            </div>
-                            <div class="rounded-full bg-congo-green-light p-3">
-                                <i class="fas fa-medal text-congo-green text-xl"></i>
-                            </div>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-2">Présence complète</p>
-                    </div>
-                `;
-
+        
         // Mettre à jour le classement des agents
         agentsRanking.innerHTML = "";
         if (data.agents.length === 0) {
           agentsRanking.innerHTML =
             '<tr><td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">Aucun agent trouvé</td></tr>';
         } else {
-          // Modification de la partie du code où les rangs sont générés
-
-          // Correction du code JavaScript pour le classement des agents et autres styles
-
           // Partie pour la génération du classement des agents
           data.agents.forEach((agent, index) => {
             const rank = (page - 1) * 10 + index + 1;
@@ -175,6 +126,18 @@ export function init() {
             const initials = `${agent.nom.charAt(0)}${agent.prenom.charAt(
               0
             )}`.toUpperCase();
+
+            // Tronquer les noms trop longs (nom complet en une seule chaîne)
+            const fullName = `${agent.nom} ${agent.prenom}`;
+            // Debug logs pour vérifier le comportement de troncation
+            console.log("Nom complet:", fullName);
+            console.log("Longueur:", fullName.length);
+            
+            const truncatedFullName = truncateText(fullName, 20);
+            console.log("Nom tronqué:", truncatedFullName);
+            
+            const truncatedBureau = truncateText(agent.bureau);
+            const truncatedService = truncateText(agent.service);
 
             // Définir des couleurs distinctes pour les rangs
             let rankBgColor;
@@ -206,19 +169,13 @@ export function init() {
             </div>
           </div>
           <div class="ml-4">
-            <div class="text-sm font-medium text-gray-900">${agent.nom} ${
-              agent.prenom
-            }</div>
+            <div class="text-sm font-medium text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap max-w-[150px]" title="${fullName}">${fullName}</div>
             <div class="text-sm text-gray-500">${agent.email || "-"}</div>
           </div>
         </div>
       </td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${
-        agent.bureau || "-"
-      }</td>
-      <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${
-        agent.service || "-"
-      }</td>
+      <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500" title="${agent.bureau || "-"}">${truncatedBureau || "-"}</td>
+      <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500" title="${agent.service || "-"}">${truncatedService || "-"}</td>
       <td class="px-4 py-3 whitespace-nowrap">
         <div class="text-sm text-gray-900 font-medium">${Math.round(
           agent.total_hours
@@ -239,7 +196,7 @@ export function init() {
   `;
           });
 
-          // Pour les statistiques globales, on utilise le code d'origine
+          // Mise à jour des statistiques globales
           globalStats.innerHTML = `
   <div class="bg-gray-50 p-4 rounded-lg shadow-sm border-l-4 border-congo-green">
       <div class="flex justify-between items-center">
