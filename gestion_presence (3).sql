@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Hôte : 127.0.0.1
--- Généré le : mer. 16 avr. 2025 à 15:38
+-- Généré le : lun. 28 avr. 2025 à 11:02
 -- Version du serveur : 10.4.32-MariaDB
 -- Version de PHP : 8.0.30
 
@@ -199,9 +199,9 @@ CREATE TABLE `login` (
 INSERT INTO `login` (`id`, `agent_id`, `mot_de_passe`, `role`) VALUES
 (4, 38, '12345', 'admin'),
 (5, 173, '123456', 'viewer'),
-(6, 148, '123456', 'viewer'),
-(7, 126, '123456', 'admin'),
-(8, 125, '123456', 'viewer');
+(6, 148, '123456', 'admin'),
+(7, 126, '123456', 'viewer'),
+(8, 125, '123456', 'admin');
 
 -- --------------------------------------------------------
 
@@ -223,7 +223,16 @@ CREATE TABLE `presence` (
 
 INSERT INTO `presence` (`id`, `agent_id`, `date`, `heure`, `type`) VALUES
 (37, 148, '2025-04-16', '08:12:40', 'arrivée'),
-(38, 137, '2025-04-16', '13:46:02', 'arrivée');
+(38, 137, '2025-04-16', '13:46:02', 'arrivée'),
+(39, 137, '2025-04-17', '12:59:17', 'arrivée'),
+(40, 137, '2025-04-17', '12:59:47', 'depart'),
+(51, 137, '2025-04-23', '09:34:21', 'arrivée'),
+(57, 148, '2025-04-23', '10:02:34', 'arrivée'),
+(58, 148, '2025-04-23', '10:02:49', 'depart'),
+(59, 148, '2025-04-24', '09:56:34', 'arrivée'),
+(60, 148, '2025-04-24', '15:56:50', 'depart'),
+(61, 148, '2025-04-25', '01:58:29', 'arrivée'),
+(62, 148, '2025-04-25', '01:58:47', 'depart');
 
 -- --------------------------------------------------------
 
@@ -328,7 +337,7 @@ ALTER TABLE `login`
 -- AUTO_INCREMENT pour la table `presence`
 --
 ALTER TABLE `presence`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=39;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=63;
 
 --
 -- AUTO_INCREMENT pour la table `service`
