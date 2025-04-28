@@ -21,7 +21,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         try {
             // Rechercher l'agent par son email
             $stmt = $pdo->prepare("
-                SELECT a.id, a.matricule, a.nom, a.prenom, l.mot_de_passe 
+                SELECT a.id, a.matricule, a.nom, a.prenom, l.mot_de_passe, l.role 
                 FROM agent a 
                 INNER JOIN login l ON a.id = l.agent_id 
                 WHERE a.email = :email
@@ -40,6 +40,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $_SESSION['user_nom'] = $user['nom'];
                     $_SESSION['user_prenom'] = $user['prenom'];
                     $_SESSION['user_matricule'] = $user['matricule'];
+                    $_SESSION['role'] = $user['role']; // Ajout du rôle dans la session
                     $_SESSION['is_logged_in'] = true;
                     
                     // Vérifier si l'utilisateur vient de scan_presence.php
@@ -212,7 +213,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
         </div>
     </div>
-
 
     <script>
         // Update current year in footer

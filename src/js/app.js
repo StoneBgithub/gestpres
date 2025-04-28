@@ -21,7 +21,7 @@ function initApp() {
 // Charger dynamiquement le module correspondant à la page
 function loadPageModule(page) {
   const moduleName = page.replace("_content", "");
-  import(`./modules/${moduleName}.js`)
+  import(`/gestpres/src/js/modules/${moduleName}.js`) 
     .then((module) => {
       if (module.init) {
         module.init();

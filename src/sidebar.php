@@ -14,10 +14,13 @@
         <nav class="flex-1 py-4 px-2">
             <ul class="space-y-1">
                 <?php
-                // Determine the current page from the URL parameter
+                // Utiliser le rôle stocké dans la session
+                $role = $_SESSION['role'] ?? 'viewer'; // Par défaut, utiliser 'viewer' si le rôle n'est pas défini
+
+                // Déterminer la page actuelle à partir du paramètre URL
                 $current_page = isset($_GET['page']) ? $_GET['page'] : 'dashboard_content';
                 
-                // Define menu items
+                // Définir les éléments du menu
                 $menu_items = [
                     'dashboard_content' => [
                         'title' => 'Tableau de Bord',
@@ -31,21 +34,26 @@
                         'title' => 'Gestion de Présence',
                         'icon' => 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'
                     ],
-                   'performance_content' => [
-                        'title' => 'Performance Agents',
-                        'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
-                    ],
+                  
                 ];
 
+                // Ajouter l'élément 'Performance des Agents' uniquement pour les admins
+                if ($role === 'admin') {
+                    $menu_items['performance_content'] = [
+                        'title' => 'Performance Agents',
+                        'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+                    ];
+                }
+
                 foreach ($menu_items as $page_name => $item) {
-                    // Apply active class only to the current page
+                    // Appliquer la classe active uniquement à la page actuelle
                     $active_class = ($current_page === $page_name) ? 'active-menu gradient-bg text-white font-bold' : 'text-congo-black';
                     echo '<li>';
-                    echo '<a href="dashboard.php?page=' . $page_name . '" class="sidebar-menu flex items-center px-4 py-3 rounded-xl hover:bg-congo-yellow-pale hover:text-congo-green-dark transition-all duration-300 card-shine ' . $active_class . '" data-page="' . $page_name . '">';
+                    echo '<a href="dashboard.php?page=' . htmlspecialchars($page_name) . '" class="sidebar-menu flex items-center px-4 py-3 rounded-xl hover:bg-congo-yellow-pale hover:text-congo-green-dark transition-all duration-300 card-shine ' . htmlspecialchars($active_class) . '" data-page="' . htmlspecialchars($page_name) . '">';
                     echo '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">';
-                    echo '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' . $item['icon'] . '" />';
+                    echo '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' . htmlspecialchars($item['icon']) . '" />';
                     echo '</svg>';
-                    echo '<span class="font-medium font-body">' . $item['title'] . '</span>';
+                    echo '<span class="font-medium font-body">' . htmlspecialchars($item['title']) . '</span>';
                     echo '</a>';
                     echo '</li>';
                 }

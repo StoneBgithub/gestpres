@@ -49,6 +49,7 @@ export function init() {
   serviceSelect.addEventListener("change", () => {
     const serviceId = serviceSelect.value;
     bureauSelect.innerHTML = '<option value="">Tous les bureaux</option>';
+    bureauSelect.disabled = !serviceId; // Activer si serviceId existe, désactiver sinon
     if (serviceId) {
       fetch(`fetch_bureaux.php?service_id=${serviceId}`)
         .then((response) => {
@@ -68,6 +69,7 @@ export function init() {
           console.error("Erreur lors du chargement des bureaux:", error);
           bureauSelect.innerHTML =
             '<option value="">Erreur de chargement</option>';
+          bureauSelect.disabled = true; // Désactiver en cas d'erreur
         });
     }
   });
@@ -127,14 +129,11 @@ export function init() {
               0
             )}`.toUpperCase();
 
-            // Tronquer les noms trop longs (nom complet en une seule chaîne)
+            // Tronquer les noms trop longs de manière stricte
             const fullName = `${agent.nom} ${agent.prenom}`;
-            // Debug logs pour vérifier le comportement de troncation
-            console.log("Nom complet:", fullName);
-            console.log("Longueur:", fullName.length);
-            
-            const truncatedFullName = truncateText(fullName, 20);
-            console.log("Nom tronqué:", truncatedFullName);
+            const strictTruncatedName = fullName.length > 20 
+                ? fullName.substring(0, 17) + "..." 
+                : fullName;
             
             const truncatedBureau = truncateText(agent.bureau);
             const truncatedService = truncateText(agent.service);
@@ -169,8 +168,8 @@ export function init() {
             </div>
           </div>
           <div class="ml-4">
-            <div class="text-sm font-medium text-gray-900 overflow-hidden text-ellipsis whitespace-nowrap max-w-[150px]" title="${fullName}">${fullName}</div>
-            <div class="text-sm text-gray-500">${agent.email || "-"}</div>
+            <div class="text-sm font-medium text-gray-900" title="${fullName}">${strictTruncatedName}</div>
+            <div class="text-sm text-gray-500">0${agent.telephone || "-"}</div>
           </div>
         </div>
       </td>

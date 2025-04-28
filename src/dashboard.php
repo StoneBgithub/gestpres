@@ -8,6 +8,12 @@ if (!isset($_SESSION['is_logged_in']) || $_SESSION['is_logged_in'] !== true) {
     exit();
 }
 
+// Utiliser le rôle stocké dans la session
+$role = $_SESSION['role'] ?? 'viewer'; // Par défaut, utiliser 'viewer' si le rôle n'est pas défini
+
+// Connexion à la base de données
+require_once 'db_connect.php';
+
 // Déterminer si c'est une requête AJAX
 $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
           strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest';
@@ -16,6 +22,14 @@ $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
 if ($isAjax) {
     $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard_content';
     $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content', 'performance_content'];
+
+    // Restreindre l'accès à performance_content pour les viewers
+    if ($page === 'performance_content' && $role === 'viewer') {
+        http_response_code(403);
+        echo json_encode(['error' => 'Accès non autorisé pour les utilisateurs avec le rôle viewer.']);
+        exit();
+    }
+
     if (in_array($page, $valid_pages)) {
         include $page . '.php';
     } else {
@@ -149,7 +163,6 @@ if ($isAjax) {
                     </h1>
                     <div class="flex items-center space-x-4">
                         <?php
-                        require_once 'db_connect.php';
                         $user_id = $_SESSION['user_id'];
                         $stmt = $pdo->prepare("
                             SELECT a.nom, a.prenom, a.photo, l.role 
@@ -182,7 +195,11 @@ if ($isAjax) {
                 <?php
                 $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard_content';
                 $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content', 'performance_content'];
-                if (in_array($page, $valid_pages)) {
+
+                // Restreindre l'accès à performance_content pour les viewers
+                if ($page === 'performance_content' && $role === 'viewer') {
+                    echo '<div class="text-red-600 font-bold">Accès non autorisé : Vous n\'avez pas la permission d\'accéder à la page Performance des Agents.</div>';
+                } elseif (in_array($page, $valid_pages)) {
                     include $page . '.php';
                 } else {
                     include 'dashboard_content.php';

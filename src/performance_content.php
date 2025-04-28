@@ -14,18 +14,9 @@ require_once 'db_connect.php';
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <i class="fas fa-search text-gray-400"></i>
                     </div>
-                    <input type="text" id="search" class="focus:ring-congo-green focus:border-congo-green block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 px-4 border" placeholder="Nom de l'agent">
+                    <input type="text" id="search" class="focus:ring-congo-green focus:border-congo-green block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 px```php
+                    px-4 border" placeholder="Nom de l'agent">
                 </div>
-            </div>
-            <div>
-                <label for="bureau" class="block text-sm font-medium text-gray-700 mb-1">Bureau</label>
-                <select id="bureau" class="focus:ring-congo-green focus:border-congo-green block w-full sm:text-sm border-gray-300 rounded-md py-2 px-4 border">
-                    <option value="">Tous les bureaux</option>
-                    <option value="bureau-1">Bureau A</option>
-                    <option value="bureau-2">Bureau B</option>
-                    <option value="bureau-3">Bureau C</option>
-                    <option value="bureau-4">Bureau D</option>
-                </select>
             </div>
             <div>
                 <label for="service" class="block text-sm font-medium text-gray-700 mb-1">Service</label>
@@ -39,7 +30,17 @@ require_once 'db_connect.php';
                 </select>
             </div>
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">&nbsp;</label>
+                <label for="bureau" class="block text-sm font-medium text-gray-700 mb-1">Bureau</label>
+                <select id="bureau" class="focus:ring-congo-green focus:border-congo-green block w-full sm:text-sm border-gray-300 rounded-md py-2 px-4 border" disabled>
+                    <option value="">Tous les bureaux</option>
+                    <option value="bureau-1">Bureau A</option>
+                    <option value="bureau-2">Bureau B</option>
+                    <option value="bureau-3">Bureau C</option>
+                    <option value="bureau-4">Bureau D</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"> </label>
                 <button id="apply-filters" class="w-full inline-flex items-center justify-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-congo-green hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-congo-green">
                     <i class="fas fa-filter mr-2"></i> Appliquer les filtres
                 </button>
@@ -47,7 +48,6 @@ require_once 'db_connect.php';
         </div>
     </div>
 </div>
-
 
     <!-- Statistiques globales -->
     <div class="bg-white p-6 rounded-xl shadow-sm mb-6">
@@ -178,10 +178,6 @@ require_once 'db_connect.php';
 .shadow-sm {
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
 }
-
-
-
-
 
 /* Ajustements ciblés pour le tableau des agents uniquement */
 #agents-ranking td {
