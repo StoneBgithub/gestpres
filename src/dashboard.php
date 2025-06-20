@@ -9,7 +9,7 @@ if (!isset($_SESSION['is_logged_in']) || $_SESSION['is_logged_in'] !== true) {
 }
 
 // Utiliser le rôle stocké dans la session
-$role = $_SESSION['role'] ?? 'viewer'; // Par défaut, utiliser 'viewer' si le rôle n'est pas défini
+$role = $_SESSION['role'] ?? 'secrétaire'; // Par défaut, utiliser 'viewer' si le rôle n'est pas défini
 
 // Connexion à la base de données
 require_once 'db_connect.php';
@@ -21,10 +21,10 @@ $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
 // Si c'est une requête AJAX, ne retourner que le contenu demandé
 if ($isAjax) {
     $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard_content';
-    $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content', 'performance_content'];
+    $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content', 'performance_content','historique_content'];
 
     // Restreindre l'accès à performance_content pour les viewers
-    if ($page === 'performance_content' && $role === 'viewer') {
+    if ($page === 'performance_content' && $role === 'directrice') {
         http_response_code(403);
         echo json_encode(['error' => 'Accès non autorisé pour les utilisateurs avec le rôle viewer.']);
         exit();
@@ -157,6 +157,7 @@ if ($isAjax) {
                             'presence_content' => 'Gestion de Présence',
                             'absences_content' => 'Gestion d\'Absence',
                             'performance_content' => 'Performance des Agents',
+                            'historique_content' => 'Historique des actions'
                         ];
                         echo isset($menu_items[$page]) ? $menu_items[$page] : ucfirst(str_replace('_content', '', $page));
                         ?>
@@ -164,12 +165,11 @@ if ($isAjax) {
                     <div class="flex items-center space-x-4">
                         <?php
                         $user_id = $_SESSION['user_id'];
-                        $stmt = $pdo->prepare("
-                            SELECT a.nom, a.prenom, a.photo, l.role 
-                            FROM agent a 
-                            INNER JOIN login l ON a.id = l.agent_id 
-                            WHERE a.id = :user_id
-                        ");
+                        $stmt = $pdo->prepare("SELECT a.nom, a.prenom, a.photo, r.libelle AS role
+                        FROM agent a
+                        JOIN login l ON a.id = l.agent_id
+                        JOIN role r ON l.role_id = r.id
+                        WHERE a.id = :user_id");
                         $stmt->bindParam(':user_id', $user_id, PDO::PARAM_INT);
                         $stmt->execute();
                         $user = $stmt->fetch();
@@ -194,12 +194,13 @@ if ($isAjax) {
             <main class="p-6 content-transition" id="main-content">
                 <?php
                 $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard_content';
-                $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content', 'performance_content'];
+                $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content', 'performance_content', 'historique_content'];
 
                 // Restreindre l'accès à performance_content pour les viewers
-                if ($page === 'performance_content' && $role === 'viewer') {
-                    echo '<div class="text-red-600 font-bold">Accès non autorisé : Vous n\'avez pas la permission d\'accéder à la page Performance des Agents.</div>';
-                } elseif (in_array($page, $valid_pages)) {
+                if (in_array($page, ['performance_content', 'historique_content']) && $role === 'secrétaire') {
+                    echo '<div class="text-red-600 font-bold">Accès non autorisé : Vous n\'avez pas la permission d\'accéder à cette page.</div>';
+                }
+                 elseif (in_array($page, $valid_pages)) {
                     include $page . '.php';
                 } else {
                     include 'dashboard_content.php';

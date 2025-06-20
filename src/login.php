@@ -9,6 +9,7 @@ require_once 'db_connect.php';
 $error = '';
 
 // Traitement du formulaire de connexion
+// Traitement du formulaire de connexion
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Récupérer et nettoyer les données du formulaire
     $email = trim($_POST['email']);
@@ -19,13 +20,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $error = "Veuillez remplir tous les champs.";
     } else {
         try {
-            // Rechercher l'agent par son email
+            // Rechercher l'agent par son email et récupérer le rôle via la jointure
             $stmt = $pdo->prepare("
-                SELECT a.id, a.matricule, a.nom, a.prenom, l.mot_de_passe, l.role 
-                FROM agent a 
-                INNER JOIN login l ON a.id = l.agent_id 
-                WHERE a.email = :email
-            ");
+    SELECT a.id, a.matricule, a.nom, a.prenom, l.mot_de_passe, r.libelle AS role
+    FROM agent a 
+    INNER JOIN login l ON a.id = l.agent_id 
+    INNER JOIN role r ON l.role_id = r.id
+    WHERE a.email = :email
+");
             $stmt->bindParam(':email', $email);
             $stmt->execute();
             
@@ -33,17 +35,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($stmt->rowCount() > 0) {
                 $user = $stmt->fetch();
                 
-                // Vérifier le mot de passe (non haché, comme demandé)
+                // Vérifier le mot de passe
                 if ($password === $user['mot_de_passe']) {
                     // Authentification réussie - Créer la session
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['user_nom'] = $user['nom'];
                     $_SESSION['user_prenom'] = $user['prenom'];
                     $_SESSION['user_matricule'] = $user['matricule'];
-                    $_SESSION['role'] = $user['role']; // Ajout du rôle dans la session
+                    $_SESSION['role'] = $user['role']; // Récupéré depuis la table role
                     $_SESSION['is_logged_in'] = true;
-                    
-                    // Vérifier si l'utilisateur vient de scan_presence.php
+                    // Redirection
+                    $update = $pdo->prepare("UPDATE login SET derniere_connexion = NOW(), etat='connecté' WHERE id = ?");
+                     $update->execute([$user['id']]);
                     if (isset($_GET['from']) && $_GET['from'] === 'scan') {
                         header("Location: scan-presence.php");
                     } else {
@@ -62,7 +65,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>

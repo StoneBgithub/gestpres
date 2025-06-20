@@ -1,4 +1,5 @@
 <?php
+require_once 'db_connect.php';
 // Démarrer la session
 session_start();
 
@@ -7,6 +8,7 @@ $_SESSION = array();
 
 // Détruire la session
 session_destroy();
+
 
 // Rediriger vers la page d'accueil
 header("Location: ./../index.php");

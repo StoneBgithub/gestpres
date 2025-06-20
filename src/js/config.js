@@ -14,8 +14,9 @@ export const pageTitles = {
   dashboard_content: "Tableau de Bord",
   agents_content: "Gestion des Agents",
   presence_content: "Gestion de Présence",
-  absences_content: "Gestion d'Absence",
+  absence_content: "Gestion d'Absence",
   performance_content: "Performance des Agents",
+  historique_content: "Historique des actions",
 };
 
 // Configuration des graphiques
