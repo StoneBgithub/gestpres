@@ -1,4 +1,7 @@
 <?php
+// Configurer le fuseau horaire pour le Congo-Brazzaville
+date_default_timezone_set('Africa/Brazzaville');
+
 require_once 'db_connect.php';
 
 // Récupérer les filtres depuis une requête POST
@@ -11,7 +14,20 @@ $bureau = $filters['bureau'] ?? 'all';
 $employee = $filters['employee'] ?? 'all';
 $custom_start = $filters['custom_start'] ?? '';
 $custom_end = $filters['custom_end'] ?? '';
-$type = $filters['type'] ?? 'all'; // Nouveau filtre pour le type
+$type = $filters['type'] ?? 'all';
+
+// Validation des filtres personnalisés (pas dans le futur)
+if ($time_range === 'custom' && $custom_start && $custom_end) {
+    $now = new DateTime();
+    $customDateTimeStart = new DateTime($date . ' ' . $custom_start);
+    $customDateTimeEnd = new DateTime($date . ' ' . $custom_end);
+    if ($customDateTimeStart > $now || $customDateTimeEnd > $now) {
+        die("Erreur : Les plages horaires personnalisées ne peuvent pas être dans le futur.");
+    }
+    if ($customDateTimeStart >= $customDateTimeEnd) {
+        die("Erreur : L'heure de début doit être antérieure à l'heure de fin.");
+    }
+}
 
 // Déterminer si des filtres sont appliqués
 $filtersApplied = (
@@ -28,11 +44,11 @@ $filtersApplied = (
 $start_time = '00:00:00';
 $end_time = '23:59:59';
 if ($time_range === 'morning') {
-    $start_time = '08:00:00';
+    $start_time = '07:00:00';
     $end_time = '12:00:00';
 } elseif ($time_range === 'afternoon') {
     $start_time = '12:00:00';
-    $end_time = '18:00:00';
+    $end_time = '14:30:00';
 } elseif ($time_range === 'custom' && $custom_start && $custom_end) {
     $start_time = $custom_start;
     $end_time = $custom_end;
@@ -52,11 +68,11 @@ if ($time_range !== 'all') {
 }
 if ($status !== 'all') {
     if ($status === 'on-time') {
-        $conditions[] = "((p.type = 'arrivée' AND p.heure <= '09:00:00') OR (p.type = 'depart' AND p.heure >= '17:00:00'))";
+        $conditions[] = "((p.type = 'arrivée' AND p.heure <= '08:30:00') OR (p.type = 'depart' AND p.heure >= '14:30:00'))";
     } elseif ($status === 'late') {
-        $conditions[] = "p.type = 'arrivée' AND p.heure > '09:00:00'";
+        $conditions[] = "p.type = 'arrivée' AND p.heure > '08:30:00'";
     } elseif ($status === 'early') {
-        $conditions[] = "p.type = 'depart' AND p.heure < '17:00:00'";
+        $conditions[] = "p.type = 'depart' AND p.heure < '14:30:00'";
     }
 }
 if ($service !== 'all') {
@@ -91,15 +107,21 @@ $departuresStmt = $pdo->prepare("SELECT COUNT(*) FROM presence p JOIN agent a ON
 $departuresStmt->execute($params);
 $departures = $departuresStmt->fetchColumn();
 
-$lateStmt = $pdo->prepare("SELECT COUNT(*) FROM presence p JOIN agent a ON p.agent_id = a.id JOIN bureau b ON a.bureau_id = b.id JOIN service s ON b.service_id = s.id $where_clause" . ($type === 'all' || $type === 'arrivée' ? " AND p.type = 'arrivée' AND p.heure > '09:00:00'" : ""));
+$lateStmt = $pdo->prepare("SELECT COUNT(*) FROM presence p JOIN agent a ON p.agent_id = a.id JOIN bureau b ON a.bureau_id = b.id JOIN service s ON b.service_id = s.id $where_clause" . ($type === 'all' || $type === 'arrivée' ? " AND p.type = 'arrivée' AND p.heure > '08:30:00'" : ""));
 $lateStmt->execute($params);
 $late = $lateStmt->fetchColumn();
 
-// Liste des présences
+// Liste des présences avec champ status
 $sql = "
     SELECT p.id, p.date, p.heure, p.type, 
            CONCAT(a.nom, ' ', a.prenom) AS nom_prenom, 
-           a.photo, s.libele AS service, b.libele AS bureau
+           a.photo, s.libele AS service, b.libele AS bureau,
+           a.id as agent_id,
+           CASE 
+               WHEN p.type = 'arrivée' AND p.heure > '08:30:00' THEN 'late'
+               WHEN p.type = 'depart' AND p.heure < '14:30:00' THEN 'early'
+               ELSE 'on-time'
+           END AS status
     FROM presence p
     JOIN agent a ON p.agent_id = a.id
     JOIN bureau b ON a.bureau_id = b.id
@@ -110,6 +132,29 @@ $sql = "
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $presences = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Vérifier les incohérences (arrivée après départ)
+$inconsistentPresences = [];
+$presenceCheckStmt = $pdo->prepare("
+    SELECT id, type, heure
+    FROM presence
+    WHERE agent_id = :agent_id AND date = :date
+    ORDER BY heure ASC
+");
+foreach ($presences as $presence) {
+    $presenceCheckStmt->execute(['agent_id' => $presence['agent_id'], 'date' => $presence['date']]);
+    $agentPresences = $presenceCheckStmt->fetchAll(PDO::FETCH_ASSOC);
+    $hasDepartureBeforeArrival = false;
+    for ($i = 1; $i < count($agentPresences); $i++) {
+        if ($agentPresences[$i]['type'] === 'arrivée' && $agentPresences[$i-1]['type'] === 'depart') {
+            $hasDepartureBeforeArrival = true;
+            break;
+        }
+    }
+    if ($hasDepartureBeforeArrival) {
+        $inconsistentPresences[$presence['id']] = true;
+    }
+}
 
 // Récupérer les données pour les filtres avec leurs relations
 $servicesStmt = $pdo->query("SELECT id, libele FROM service");
@@ -158,14 +203,14 @@ $agents = $agentsStmt->fetchAll(PDO::FETCH_ASSOC);
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                     <label for="date" class="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                    <input type="date" id="date" name="date" value="<?php echo htmlspecialchars($date); ?>" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white py-2 px-3">
+                    <input type="date" id="date" name="date" max="<?php echo date('Y-m-d'); ?>" value="<?php echo htmlspecialchars($date); ?>" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white py-2 px-3">
                 </div>
                 <div>
                     <label for="time-range" class="block text-sm font-medium text-gray-700 mb-1">Plage horaire</label>
                     <select id="time-range" name="time_range" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white py-2 px-3">
                         <option value="all" <?php echo $time_range === 'all' ? 'selected' : ''; ?>>Toute la journée</option>
-                        <option value="morning" <?php echo $time_range === 'morning' ? 'selected' : ''; ?>>Matin (8h-12h)</option>
-                        <option value="afternoon" <?php echo $time_range === 'afternoon' ? 'selected' : ''; ?>>Après-midi (12h-18h)</option>
+                        <option value="morning" <?php echo $time_range === 'morning' ? 'selected' : ''; ?>>Matin (7h-12h)</option>
+                        <option value="afternoon" <?php echo $time_range === 'afternoon' ? 'selected' : ''; ?>>Après-midi (12h-14h30)</option>
                         <option value="custom" <?php echo $time_range === 'custom' ? 'selected' : ''; ?>>Personnalisé...</option>
                     </select>
                     <div id="custom-time" class="mt-2" style="display: <?php echo $time_range === 'custom' ? 'block' : 'none'; ?>;">
@@ -309,7 +354,7 @@ $agents = $agentsStmt->fetchAll(PDO::FETCH_ASSOC);
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                     <?php foreach ($presences as $presence): ?>
-                        <tr class="hover:bg-gray-50 text-sm entry-row <?php echo $presence['type'] === 'arrivée' ? 'arrival' : 'departure'; ?>">
+                        <tr class="hover:bg-gray-50 text-sm entry-row <?php echo $presence['type'] === 'arrivée' ? 'arrival' : 'departure'; ?> <?php echo isset($inconsistentPresences[$presence['id']]) ? 'bg-red-50' : ''; ?>">
                             <td class="px-6 py-4">
                                 <?php 
                                 $photoExists = !empty($presence['photo']) && $presence['photo'] !== 'NULL' && file_exists($presence['photo']);
@@ -332,21 +377,26 @@ $agents = $agentsStmt->fetchAll(PDO::FETCH_ASSOC);
                             <td class="px-6 py-4"><?php echo date('d/m/Y', strtotime($presence['date'])); ?></td>
                             <td class="px-6 py-4"><?php echo date('H:i', strtotime($presence['heure'])); ?></td>
                             <td class="px-6 py-4 min-w-[180px]">
-                                <?php if ($presence['type'] === 'arrivée'): ?>
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap <?php echo $presence['heure'] > '09:00:00' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'; ?>">
-                                        <svg class="w-3.5 h-3.5 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
-                                        </svg>
-                                        <span class="truncate"><?php echo $presence['heure'] > '09:00:00' ? 'Arrivée (Retard)' : 'Arrivée'; ?></span>
-                                    </span>
-                                <?php else: ?>
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap <?php echo $presence['heure'] < '17:00:00' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'; ?>">
-                                        <svg class="w-3.5 h-3.5 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                                        </svg>
-                                        <span class="truncate"><?php echo $presence['heure'] < '17:00:00' ? 'Départ anticipé' : 'Départ'; ?></span>
-                                    </span>
-                                <?php endif; ?>
+                                <?php
+                                $statusClass = '';
+                                $statusText = '';
+                                if ($presence['type'] === 'arrivée') {
+                                    $statusClass = $presence['status'] === 'late' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800';
+                                    $statusText = $presence['status'] === 'late' ? 'Arrivée (Retard)' : 'Arrivée';
+                                } else {
+                                    $statusClass = $presence['status'] === 'early' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800';
+                                    $statusText = $presence['status'] === 'early' ? 'Départ anticipé' : 'Départ';
+                                }
+                                ?>
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap <?php echo $statusClass; ?>">
+                                    <svg class="w-3.5 h-3.5 mr-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="<?php echo $presence['type'] === 'arrivée' ? 'M17 8l4 4m0 0l-4 4m4-4H3' : 'M10 19l-7-7m0 0l7-7m-7 7h18'; ?>"></path>
+                                    </svg>
+                                    <span class="truncate"><?php echo $statusText; ?></span>
+                                    <?php if (isset($inconsistentPresences[$presence['id']])): ?>
+                                        <span class="ml-2 text-red-600 text-xs">(Incohérence)</span>
+                                    <?php endif; ?>
+                                </span>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -355,5 +405,47 @@ $agents = $agentsStmt->fetchAll(PDO::FETCH_ASSOC);
         </div>
     </div>
 </div>
+
+<script src="js/modules/presence.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        presence.init();
+
+        // Validation côté client pour empêcher les dates futures dans le filtre de date
+        const dateInput = document.getElementById('date');
+        dateInput.addEventListener('change', function() {
+            const today = new Date().toISOString().split('T')[0];
+            if (this.value > today) {
+                alert("Erreur : Vous ne pouvez pas sélectionner une date dans le futur.");
+                this.value = today;
+            }
+        });
+
+        // Validation côté client pour les plages horaires personnalisées
+        const customStart = document.getElementById('custom_start');
+        const customEnd = document.getElementById('custom_end');
+        const dateFilter = document.getElementById('date');
+        document.getElementById('filter-form').addEventListener('submit', function(e) {
+            if (document.getElementById('time-range').value === 'custom' && customStart.value && customEnd.value) {
+                const now = new Date();
+                const selectedDate = dateFilter.value || now.toISOString().split('T')[0];
+                const startDateTime = new Date(`${selectedDate}T${customStart.value}`);
+                const endDateTime = new Date(`${selectedDate}T${customEnd.value}`);
+                
+                if (startDateTime >= endDateTime) {
+                    e.preventDefault();
+                    alert("Erreur : L'heure de début doit être antérieure à l'heure de fin.");
+                    return;
+                }
+                
+                if (startDateTime > now || endDateTime > now) {
+                    e.preventDefault();
+                    alert("Erreur : Les plages horaires personnalisées ne peuvent pas être dans le futur.");
+                    return;
+                }
+            }
+        });
+    });
+</script>
 </body>
 </html>

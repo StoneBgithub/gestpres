@@ -26,15 +26,22 @@ try {
     }
     
     // Valider la date et l'heure si fournies
-    if ($presenceDate !== date('Y-m-d')) {
+    if ($presenceDate !== date('Y-m-d') || $presenceTime !== date('H:i:s')) {
+        // Vérifier le format
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $presenceDate) || !strtotime($presenceDate)) {
             echo json_encode(['success' => false, 'message' => 'Format de date invalide']);
             exit;
         }
-    }
-    if ($presenceTime !== date('H:i:s')) {
         if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $presenceTime)) {
             echo json_encode(['success' => false, 'message' => 'Format d\'heure invalide']);
+            exit;
+        }
+        
+        // Vérifier que la date/heure n'est pas dans le futur
+        $selectedDateTime = new DateTime("$presenceDate $presenceTime");
+        $now = new DateTime();
+        if ($selectedDateTime > $now) {
+            echo json_encode(['success' => false, 'message' => ' Vous ne pouvez pas enregistrer une présence dans le futur.']);
             exit;
         }
     }
@@ -71,18 +78,39 @@ try {
     $presences = $stmtPresence->fetchAll(PDO::FETCH_ASSOC);
     $presenceCount = count($presences);
     
+    // Vérifier l'ordre chronologique des présences
+    if ($presenceCount > 0) {
+        $lastPresence = end($presences);
+        if ($lastPresence['type'] === 'depart') {
+            echo json_encode([
+                'success' => false, 
+                'message' => ' Un départ a déjà été enregistré pour cette date. Une arrivée ne peut pas être ajoutée après un départ.'
+            ]);
+            exit;
+        }
+    }
+    
     // Déterminer le type de présence (arrivée ou départ)
     if ($presenceCount == 0) {
-        // Premier scan de la journée = arrivée
         $type = 'arrivée';
+        $isLate = $presenceTime > '08:30:00';
+        $status = $isLate ? 'late' : 'on-time';
     } elseif ($presenceCount == 1) {
-        // Deuxième scan = départ
         $type = 'depart';
+        $existingArrival = $presences[0];
+        if ($existingArrival['type'] === 'arrivée' && $presenceTime <= $existingArrival['heure']) {
+            echo json_encode([
+                'success' => false, 
+                'message' => ' L\'heure de départ doit être postérieure à l\'heure d\'arrivée (' . $existingArrival['heure'] . ').'
+            ]);
+            exit;
+        }
+        $isEarly = $presenceTime < '14:30:00';
+        $status = $isEarly ? 'early' : 'on-time';
     } else {
-        // Déjà fait deux scans à cette date
         echo json_encode([
             'success' => false, 
-            'message' => 'Vous avez déjà enregistré votre arrivée et votre départ pour cette date'
+            'message' => 'Vous avez déjà enregistré votre arrivée et votre départ pour cette date.'
         ]);
         exit;
     }
@@ -98,10 +126,11 @@ try {
     $stmtInsert->bindParam(':type', $type);
     $stmtInsert->execute();
     
-    // Retourner les données de l'agent et le type d'enregistrement
+    // Retourner les données de l'agent, le type d'enregistrement et le statut
     $response = [
         'success' => true,
         'type' => $type,
+        'status' => $status,
         'agent' => [
             'nom' => $agent['nom'],
             'prenom' => $agent['prenom'],
