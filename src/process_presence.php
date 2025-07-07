@@ -16,12 +16,12 @@ try {
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Récupérer les données de la requête POST
-    $matricule = isset($_POST['matricule']) ? trim($_POST['matricule']) : '';
+    $agent_id = isset($_POST['agent']) ? (int)$_POST['agent'] : 0;
     $presenceDate = isset($_POST['presence_date']) ? trim($_POST['presence_date']) : date('Y-m-d');
     $presenceTime = isset($_POST['presence_time']) ? trim($_POST['presence_time']) : date('H:i:s');
     
-    if (empty($matricule)) {
-        echo json_encode(['success' => false, 'message' => 'Matricule non fourni']);
+    if ($agent_id <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Agent non fourni']);
         exit;
     }
     
@@ -34,26 +34,26 @@ try {
     }
     if ($presenceTime !== date('H:i:s')) {
         if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $presenceTime)) {
-            echo json_encode(['success' => false, 'message' => 'Format d\'heure invalide']);
+            echo json_encode(['success' => false, 'message' => "Format d'heure invalide"]);
             exit;
         }
     }
     
     // Vérifier si l'agent existe
     $stmtAgent = $conn->prepare("
-        SELECT a.id, a.matricule, a.nom, a.prenom, a.photo, b.libele as bureau, s.libele as service
+        SELECT a.id, a.nom, a.prenom, a.photo, b.libele as bureau, s.libele as service
         FROM agent a
         INNER JOIN bureau b ON a.bureau_id = b.id
         INNER JOIN service s ON b.service_id = s.id
-        WHERE a.matricule = :matricule
+        WHERE a.id = :agent_id
     ");
-    $stmtAgent->bindParam(':matricule', $matricule);
+    $stmtAgent->bindParam(':agent_id', $agent_id, PDO::PARAM_INT);
     $stmtAgent->execute();
     
     $agent = $stmtAgent->fetch(PDO::FETCH_ASSOC);
     
     if (!$agent) {
-        echo json_encode(['success' => false, 'message' => 'Agent non trouvé avec ce matricule']);
+        echo json_encode(['success' => false, 'message' => 'Agent non trouvé']);
         exit;
     }
     
@@ -64,7 +64,7 @@ try {
         WHERE agent_id = :agent_id AND date = :presence_date 
         ORDER BY heure ASC
     ");
-    $stmtPresence->bindParam(':agent_id', $agent['id']);
+    $stmtPresence->bindParam(':agent_id', $agent_id, PDO::PARAM_INT);
     $stmtPresence->bindParam(':presence_date', $presenceDate);
     $stmtPresence->execute();
     
@@ -73,13 +73,10 @@ try {
     
     // Déterminer le type de présence (arrivée ou départ)
     if ($presenceCount == 0) {
-        // Premier scan de la journée = arrivée
         $type = 'arrivée';
     } elseif ($presenceCount == 1) {
-        // Deuxième scan = départ
-        $type = 'depart';
+        $type = 'départ';
     } else {
-        // Déjà fait deux scans à cette date
         echo json_encode([
             'success' => false, 
             'message' => 'Vous avez déjà enregistré votre arrivée et votre départ pour cette date'
@@ -92,7 +89,7 @@ try {
         INSERT INTO presence (agent_id, date, heure, type) 
         VALUES (:agent_id, :presence_date, :presence_time, :type)
     ");
-    $stmtInsert->bindParam(':agent_id', $agent['id']);
+    $stmtInsert->bindParam(':agent_id', $agent_id, PDO::PARAM_INT);
     $stmtInsert->bindParam(':presence_date', $presenceDate);
     $stmtInsert->bindParam(':presence_time', $presenceTime);
     $stmtInsert->bindParam(':type', $type);
@@ -105,7 +102,6 @@ try {
         'agent' => [
             'nom' => $agent['nom'],
             'prenom' => $agent['prenom'],
-            'bureau' => $agent['bureau'],
             'service' => $agent['service'],
             'photo' => $agent['photo']
         ]
