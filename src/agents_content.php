@@ -55,7 +55,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
     if (empty($nom)) $messages['errors'][] = "Le nom est requis.";
     if (empty($prenom)) $messages['errors'][] = "Le prénom est requis.";
     // if (empty($matricule)) $messages['errors'][] = "Le matricule est requis.";
-    if (empty($email)) $messages['errors'][] = "L'email est requis.";
+    // if (empty($email)) $messages['errors'][] = "L'email est requis.";
     if (empty($telephone)) $messages['errors'][] = "Le téléphone est requis.";
     if (empty($bureau_id)) $messages['errors'][] = "Le bureau est requis.";
 
@@ -186,6 +186,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
                     ]);
                 }
             } elseif ($action === 'update' && $agent_id) {
+
+                $matricule = trim($_POST['matricule'] ?? '');
                 // Modification d’un agent existant
                 $sql = "UPDATE agent SET 
                         matricule = :matricule, 
@@ -603,7 +605,7 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <i class="fas fa-envelope text-gray-400"></i>
                         </div>
-                        <input type="email" name="email" id="email" required
+                        <input type="email" name="email" id="email"
                             class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
                     </div>
                 </div>
