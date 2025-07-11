@@ -1,5 +1,5 @@
 import { eventBus } from "../config.js";
-
+console.log("✅ JS chargé !");
 // Liste des agents et bureaux
 let agents = [];
 let bureaux = [];
@@ -26,6 +26,22 @@ export function init() {
   setupListeners();
   setupFilters();
   checkAndShowMessageModal();
+}
+function drawResponsiveText(ctx, text, maxWidth, initialFontSize, x, y, fontFamily = "Arial", color = "#f2f0e9", bold = false) {
+  let fontSize = initialFontSize;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillStyle = color;
+
+  // Réduire la taille de la police si le texte dépasse maxWidth
+  do {
+    ctx.font = `${bold ? "bold " : ""}${fontSize}pt ${fontFamily}`;
+    const textWidth = ctx.measureText(text).width;
+    if (textWidth <= maxWidth) break;
+    fontSize -= 1;
+  } while (fontSize > 10); // Taille minimale
+
+  ctx.fillText(text, x, y);
 }
 
 // Charger les données des agents depuis l’élément script
@@ -130,7 +146,7 @@ function setupListeners() {
       editAgent(agentId);
     }
 
-    // Boutons de génération QR
+    // Boutons de génération de badge
     if (target.matches(".qr-agent-btn") || target.closest(".qr-agent-btn")) {
       const btn = target.matches(".qr-agent-btn")
         ? target
@@ -152,21 +168,19 @@ function setupListeners() {
     }
   });
 
-  // Gestion du bouton de téléchargement du QR code
+  // Gestion du bouton de téléchargement du badge
   const downloadQRBtn = document.getElementById("downloadQRBtn");
   if (downloadQRBtn) {
     downloadQRBtn.addEventListener("click", function () {
-      const qrCanvas = document
-        .getElementById("qrCodeContainer")
-        .querySelector("canvas");
-      if (qrCanvas) {
+      const canvas = document.getElementById("qrCodeContainer").querySelector("canvas");
+      if (canvas) {
         const qrAgentName = document.getElementById("qrAgentName").textContent;
         const link = document.createElement("a");
-        link.href = qrCanvas.toDataURL("image/png");
-        link.download = `qrcode_${qrAgentName.replace(/\s+/g, "_")}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.download = `badge_${qrAgentName.replace(/\s+/g, "_")}.png`;
         link.click();
       } else {
-        alert("Le QR code n'a pas été généré correctement.");
+        alert("Le badge n'a pas été généré correctement.");
       }
     });
   }
@@ -225,9 +239,9 @@ export function editAgent(agentId) {
   showModal("agentModal");
 }
 
-// Fonction pour générer et afficher le QR code
+// Fonction pour générer et afficher le badge
 export function generateQR(agentId) {
-  console.log(`Génération du QR pour l’agent ID : ${agentId}`);
+  console.log(`Génération du badge pour l’agent ID : ${agentId}`);
   const modal = document.getElementById("qrModal");
   if (!modal) {
     console.error("Modal 'qrModal' non trouvé");
@@ -238,32 +252,101 @@ export function generateQR(agentId) {
   const agent = agents.find((a) => a.id === agentIdStr);
   if (!agent) {
     console.error(`Agent ID ${agentId} non trouvé`);
-    alert("Agent non trouvé pour QR.");
+    alert("Agent non trouvé pour le badge.");
     return;
   }
 
-  // Mettre à jour les informations de l'agent
-  document.getElementById(
-    "qrAgentName"
-  ).textContent = `${agent.prenom} ${agent.nom}`;
-  document.getElementById(
-    "qrAgentInfo"
-  ).textContent = `${agent.libele_service} - ${agent.libele_bureau}`;
+  // Mettre à jour les informations de l'agent dans la modale
+  document.getElementById("qrAgentName").textContent = `${agent.prenom} ${agent.nom}`;
+  document.getElementById("qrAgentInfo").textContent = `${agent.libele_service} - ${agent.libele_bureau}`;
 
-  // Générer le QR code avec le matricule
-  const qrContainer = document.getElementById("qrCodeContainer");
-  qrContainer.innerHTML = ""; // Vider le conteneur
-  new QRCode(qrContainer, {
-    text: agent.matricule, // Utiliser le matricule comme valeur du QR code
-    width: 200,
-    height: 200,
-    colorDark: "#000000",
-    colorLight: "#ffffff",
-    correctLevel: QRCode.CorrectLevel.H,
-  });
+  // Créer un canvas pour le badge
+  const canvas = document.createElement("canvas");
+  canvas.width = 874; // Taille B7 vertical
+  canvas.height = 1240;
+  const ctx = canvas.getContext("2d");
 
-  showModal("qrModal");
-  eventBus.publish("agents:qrGenerated", { agentId, agent });
+  // Charger l'image de fond (template)
+  const templateImg = new Image();
+  templateImg.src = "images/1.png"; // Chemin vers le template
+
+  templateImg.onload = function () {
+    // Dessiner l'image de fond
+    ctx.drawImage(templateImg, 0, 0, 874, 1240);
+
+    // Dessiner la photo de l'agent dans une ellipse
+    if (agent.photo && agent.photo !== "NULL" && agent.photo !== "") {
+      const photoImg = new Image();
+      photoImg.src = agent.photo;
+      photoImg.onload = function () {
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(437.03, 618.28, 266.14 / 2, 279.22 / 2, 0, 0, 2 * Math.PI); // Ellipse pour la photo
+        ctx.clip();
+        ctx.drawImage(photoImg, 437.03 - 266.14 / 2, 618.28 - 279.22 / 2, 266.14, 279.22);
+        ctx.restore();
+        drawTextAndQR();
+      };
+      photoImg.onerror = function () {
+        console.warn("Erreur de chargement de la photo, affichage sans photo.");
+        drawTextAndQR();
+      };
+    } else {
+      drawTextAndQR();
+    }
+
+    // Fonction pour dessiner le texte et le QR code
+    function drawTextAndQR() {
+      // Dessiner le nom de l'agent
+      ctx.font = "bold 50pt Arial"; // Taille de police pour le nom
+      ctx.fillStyle = "#004225"; // Couleur du texte
+      ctx.textAlign = "center"; // Alignement à gauche pour correspondre à la position X
+      ctx.textBaseline = "top";               // Alignement vertical (optionnel mais recommandé)
+      ctx.fillText(`${agent.prenom} ${agent.nom}`, 430.49, 778.77);
+
+      // Dessiner le libellé du bureau de manière responsive
+      const bureauText = agent.libele_bureau || "Non défini";
+      drawResponsiveText(ctx, bureauText, 500, 25, 433.38, 860.5); // maxWidth 500px, initialFontSize 25pt
+
+
+      // Générer le QR code
+      const qrContainer = document.createElement("div");
+      qrContainer.style.display = "none"; // Cacher temporairement
+      document.body.appendChild(qrContainer); // Ajouter temporairement au DOM
+      new QRCode(qrContainer, {
+        text: agent.matricule || "N/A", // Utiliser le matricule pour le QR code
+        width: 295.99, // Taille du QR code
+        height: 289.03,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H,
+      });
+
+      // Attendre que le QR code soit généré
+      setTimeout(() => {
+        const qrCanvas = qrContainer.querySelector("canvas");
+        if (qrCanvas) {
+          ctx.drawImage(qrCanvas, 289, 915.97, 295.99, 289.03); // Positionner le QR code
+        } else {
+          console.error("Le QR code n'a pas été généré.");
+        }
+        document.body.removeChild(qrContainer); // Supprimer le conteneur temporaire
+
+        // Afficher le badge dans la modale
+        const qrCodeContainer = document.getElementById("qrCodeContainer");
+        qrCodeContainer.innerHTML = "";
+        qrCodeContainer.appendChild(canvas);
+
+        showModal("qrModal");
+        eventBus.publish("agents:badgeGenerated", { agentId, agent });
+      }, 100);
+    }
+  };
+
+  templateImg.onerror = function () {
+    console.error("Erreur lors du chargement du template de badge (images/1.png).");
+    alert("Impossible de charger le modèle de badge.");
+  };
 }
 
 // Fonction pour ouvrir le modal de suppression
@@ -432,7 +515,7 @@ function setupFilters() {
               <button class="qr-agent-btn px-2 py-1 text-xs sm:text-sm bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors" data-id="${
                 agent.id
               }">
-                <i class="fas fa-qrcode mr-1"></i> QR Code
+                <i class="fas fa-id-card mr-1"></i> Badge
               </button>
               <button class="delete-agent-btn px-2 py-1 text-xs sm:text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors" data-id="${
                 agent.id
@@ -519,8 +602,8 @@ function setupFilters() {
                 </button>
                 <button class="qr-agent-btn text-green-600 hover:text-green-900 transition-colors" data-id="${
                   agent.id
-                }" title="Générer QR Code">
-                  <i class="fas fa-qrcode"></i>
+                }" title="Générer Badge">
+                  <i class="fas fa-id-card"></i>
                 </button>
                 <button class="delete-agent-btn text-red-600 hover:text-red-900 transition-colors" data-id="${
                   agent.id

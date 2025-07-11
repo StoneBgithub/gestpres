@@ -23,7 +23,7 @@ try {
     $custom_start = $_GET['custom_start'] ?? '';
     $custom_end = $_GET['custom_end'] ?? '';
     $status = $_GET['status'] ?? 'all';
-    $type = $_GET['type'] ?? 'all'; // Nouveau paramètre pour le type
+    $type = $_GET['type'] ?? 'all';
 
     error_log("Paramètres : service=$service, bureau=$bureau, employee=$employee, date=$date, time_range=$time_range, status=$status, type=$type");
 
@@ -38,9 +38,9 @@ try {
 
     if ($time_range !== 'all') {
         if ($time_range === 'morning') {
-            $conditions[] = "p.heure BETWEEN '08:00:00' AND '12:00:00'";
+            $conditions[] = "p.heure BETWEEN '07:00:00' AND '12:00:00'";
         } elseif ($time_range === 'afternoon') {
-            $conditions[] = "p.heure BETWEEN '12:00:00' AND '18:00:00'";
+            $conditions[] = "p.heure BETWEEN '12:00:00' AND '14:30:00'";
         } elseif ($time_range === 'custom' && $custom_start && $custom_end) {
             $conditions[] = "p.heure BETWEEN :custom_start AND :custom_end";
             $params[':custom_start'] = $custom_start;
@@ -50,11 +50,11 @@ try {
 
     if ($status !== 'all') {
         if ($status === 'on-time') {
-            $conditions[] = "((p.type = 'arrivée' AND p.heure <= '09:00:00') OR (p.type = 'depart' AND p.heure >= '17:00:00'))";
+            $conditions[] = "((p.type = 'arrivée' AND p.heure <= '08:30:00') OR (p.type = 'depart' AND p.heure >= '14:30:00'))";
         } elseif ($status === 'late') {
-            $conditions[] = "p.type = 'arrivée' AND p.heure > '09:00:00'";
+            $conditions[] = "p.type = 'arrivée' AND p.heure > '08:30:00'";
         } elseif ($status === 'early') {
-            $conditions[] = "p.type = 'depart' AND p.heure < '17:00:00'";
+            $conditions[] = "p.type = 'depart' AND p.heure < '14:30:00'";
         }
     }
 
@@ -80,11 +80,16 @@ try {
 
     $where_clause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
 
-    // Requête SQL
+    // Requête SQL avec champ status
     $sql = "
         SELECT p.id, p.date, p.heure, p.type, 
                CONCAT(a.nom, ' ', a.prenom) AS nom_prenom, 
-               a.photo, s.libele AS service, b.libele AS bureau
+               a.photo, s.libele AS service, b.libele AS bureau,
+               CASE 
+                   WHEN p.type = 'arrivée' AND p.heure > '08:30:00' THEN 'late'
+                   WHEN p.type = 'depart' AND p.heure < '14:30:00' THEN 'early'
+                   ELSE 'on-time'
+               END AS status
         FROM presence p
         JOIN agent a ON p.agent_id = a.id
         JOIN bureau b ON a.bureau_id = b.id
@@ -109,6 +114,7 @@ try {
             'date' => $row['date'] ? date('d/m/Y', strtotime($row['date'])) : '-',
             'heure' => $row['heure'] ? date('H:i', strtotime($row['heure'])) : '-',
             'type' => $row['type'],
+            'status' => $row['status'], // Ajout du champ status
             'nom_prenom' => $row['nom_prenom'] ?: '-',
             'photo' => $row['photo'] ?: '',
             'service' => $row['service'] ?: '-',

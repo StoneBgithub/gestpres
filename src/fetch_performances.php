@@ -6,6 +6,9 @@ require_once 'db_connect.php';
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
+// Configurer le fuseau horaire
+date_default_timezone_set('Africa/Brazzaville');
+
 try {
     // Récupérer les paramètres
     $search = isset($_GET['search']) ? trim($_GET['search']) : '';
@@ -28,6 +31,13 @@ try {
     $start_date_str = $start_date->format('Y-m-d');
     $end_date_str = $end_date->format('Y-m-d');
 
+    // Validation : empêcher les dates futures
+    $now = new DateTime();
+    if ($end_date > $now) {
+        $end_date = $now;
+        $end_date_str = $end_date->format('Y-m-d');
+    }
+
     // Calculer les jours ouvrables (lundi à vendredi)
     $interval = $start_date->diff($end_date);
     $working_days = 0;
@@ -39,58 +49,51 @@ try {
         $current_date->modify('+1 day');
     }
 
-    // Log pour vérifier la période
-    error_log("Période : $start_date_str à $end_date_str, Jours ouvrables : $working_days");
-
-    // Requête de débogage pour voir les données brutes
-    $debug_sql = "
-        SELECT agent_id, date, heure, type
-        FROM presence
-        WHERE date BETWEEN :start_date AND :end_date
-        ORDER BY agent_id, date, type
-    ";
-    $debug_stmt = $pdo->prepare($debug_sql);
-    $debug_stmt->execute([':start_date' => $start_date_str, ':end_date' => $end_date_str]);
-    $debug_data = $debug_stmt->fetchAll(PDO::FETCH_ASSOC);
-    error_log("Données brutes presence : " . print_r($debug_data, true));
-
     // Requête pour les agents
     $sql = "
-    SELECT 
-        a.id, a.nom, a.prenom, a.telephone, a.matricule,  /* Remplacer a.email par a.telephone */
-        b.libele AS bureau, s.libele AS service,
-        COUNT(DISTINCT CASE WHEN p.type = 'arrivée' AND p.date BETWEEN :start_date AND :end_date THEN p.date END) AS days_present,
-        COALESCE(SUM(CASE 
-            WHEN p.type = 'depart' AND p2.heure IS NOT NULL AND p2.heure < p.heure
-            THEN GREATEST(
-                TIME_TO_SEC(TIMEDIFF(
-                    CASE WHEN p.heure <= '14:00:00' THEN p.heure ELSE '14:00:00' END, 
-                    p2.heure
-                )) / 3600, 
-                0
-            )
-            ELSE 0 
-        END), 0) AS regular_hours,
-        COALESCE(SUM(CASE 
-            WHEN p.type = 'depart' AND p.heure > '14:00:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure
-            THEN GREATEST(
-                TIME_TO_SEC(TIMEDIFF(p.heure, '14:00:00')) / 3600, 
-                0
-            )
-            ELSE 0 
-        END), 0) AS overtime_hours
-    FROM agent a
-    LEFT JOIN bureau b ON a.bureau_id = b.id
-    LEFT JOIN service s ON b.service_id = s.id
-    LEFT JOIN presence p ON a.id = p.agent_id AND p.date BETWEEN :start_date AND :end_date
-    LEFT JOIN presence p2 ON p.agent_id = p2.agent_id 
-        AND p.date = p2.date 
-        AND p2.type = 'arrivée' 
-        AND p.type = 'depart'
-    LEFT JOIN absence_justifiee aj ON a.id = aj.agent_id
-        AND p.date BETWEEN aj.date_debut AND aj.date_fin
-    WHERE aj.id IS NULL
-";
+        SELECT 
+            a.id, a.nom, a.prenom, a.telephone, a.matricule,
+            b.libele AS bureau, s.libele AS service,
+            COUNT(DISTINCT CASE WHEN p.type = 'arrivée' AND p.date BETWEEN :start_date AND :end_date THEN p.date END) AS days_present,
+            COALESCE(SUM(CASE 
+                WHEN p.type = 'depart' AND p2.heure IS NOT NULL AND p2.heure < p.heure
+                THEN GREATEST(
+                    TIME_TO_SEC(TIMEDIFF(
+                        CASE WHEN p.heure <= '14:30:00' THEN p.heure ELSE '14:30:00' END, 
+                        CASE WHEN p2.heure < '07:00:00' THEN '07:00:00' ELSE p2.heure END
+                    )) / 3600, 
+                    0
+                )
+                ELSE 0 
+            END), 0) AS regular_hours,
+            COALESCE(SUM(CASE 
+                WHEN p.type = 'depart' AND p.heure > '14:30:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure
+                THEN GREATEST(
+                    TIME_TO_SEC(TIMEDIFF(p.heure, '14:30:00')) / 3600, 
+                    0
+                )
+                ELSE 0 
+            END), 0) AS overtime_hours,
+            COALESCE(SUM(CASE 
+                WHEN p.type = 'arrivée' AND p.heure > '08:30:00' AND p.date BETWEEN :start_date AND :end_date
+                THEN 1 
+                ELSE 0 
+            END), 0) AS late_count,
+            COALESCE(SUM(CASE 
+                WHEN p.type = 'depart' AND p.heure < '14:30:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure AND p.date BETWEEN :start_date AND :end_date
+                THEN 1 
+                ELSE 0 
+            END), 0) AS early_departure_count
+        FROM agent a
+        LEFT JOIN bureau b ON a.bureau_id = b.id
+        LEFT JOIN service s ON b.service_id = s.id
+        LEFT JOIN presence p ON a.id = p.agent_id AND p.date BETWEEN :start_date AND :end_date
+        LEFT JOIN presence p2 ON p.agent_id = p2.agent_id 
+            AND p.date = p2.date 
+            AND p2.type = 'arrivée' 
+            AND p.type = 'depart'
+      
+    ";
 
     $params = [':start_date' => $start_date_str, ':end_date' => $end_date_str];
 
@@ -108,23 +111,23 @@ try {
         $params[':bureau_id'] = $bureau_id;
     }
 
-    $sql .= " GROUP BY a.id, a.nom, a.prenom, a.email, a.matricule, b.libele, s.libele";
+    $sql .= " GROUP BY a.id, a.nom, a.prenom, a.telephone, a.matricule, b.libele, s.libele";
     $sql .= " ORDER BY (
         COALESCE(SUM(CASE 
             WHEN p.type = 'depart' AND p2.heure IS NOT NULL AND p2.heure < p.heure
             THEN GREATEST(
                 TIME_TO_SEC(TIMEDIFF(
-                    CASE WHEN p.heure <= '14:00:00' THEN p.heure ELSE '14:00:00' END, 
-                    p2.heure
+                    CASE WHEN p.heure <= '14:30:00' THEN p.heure ELSE '14:30:00' END, 
+                    CASE WHEN p2.heure < '07:00:00' THEN '07:00:00' ELSE p2.heure END
                 )) / 3600, 
                 0
             )
             ELSE 0 
         END), 0) +
         COALESCE(SUM(CASE 
-            WHEN p.type = 'depart' AND p.heure > '14:00:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure
+            WHEN p.type = 'depart' AND p.heure > '14:30:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure
             THEN GREATEST(
-                TIME_TO_SEC(TIMEDIFF(p.heure, '14:00:00')) / 3600, 
+                TIME_TO_SEC(TIMEDIFF(p.heure, '14:30:00')) / 3600, 
                 0
             )
             ELSE 0 
@@ -141,9 +144,6 @@ try {
     $stmt->execute();
     $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Log pour déboguer les agents
-    error_log("Agents récupérés : " . print_r($agents, true));
-
     // Requête pour le total d'agents
     $count_sql = "
         SELECT COUNT(DISTINCT a.id)
@@ -151,9 +151,7 @@ try {
         LEFT JOIN bureau b ON a.bureau_id = b.id
         LEFT JOIN service s ON b.service_id = s.id
         LEFT JOIN presence p ON a.id = p.agent_id AND p.date BETWEEN :start_date AND :end_date
-        LEFT JOIN absence_justifiee aj ON a.id = aj.agent_id
-            AND p.date BETWEEN aj.date_debut AND aj.date_fin
-        WHERE aj.id IS NULL
+      
     ";
     $count_params = [':start_date' => $start_date_str, ':end_date' => $end_date_str];
     if ($search) {
@@ -180,17 +178,17 @@ try {
                 WHEN p.type = 'depart' AND p2.heure IS NOT NULL AND p2.heure < p.heure
                 THEN GREATEST(
                     TIME_TO_SEC(TIMEDIFF(
-                        CASE WHEN p.heure <= '14:00:00' THEN p.heure ELSE '14:00:00' END, 
-                        p2.heure
+                        CASE WHEN p.heure <= '14:30:00' THEN p.heure ELSE '14:30:00' END, 
+                        CASE WHEN p2.heure < '07:00:00' THEN '07:00:00' ELSE p2.heure END
                     )) / 3600, 
                     0
                 )
                 ELSE 0 
             END), 0) AS total_regular_hours,
             COALESCE(SUM(CASE 
-                WHEN p.type = 'depart' AND p.heure > '14:00:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure
+                WHEN p.type = 'depart' AND p.heure > '14:30:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure
                 THEN GREATEST(
-                    TIME_TO_SEC(TIMEDIFF(p.heure, '14:00:00')) / 3600, 
+                    TIME_TO_SEC(TIMEDIFF(p.heure, '14:30:00')) / 3600, 
                     0
                 )
                 ELSE 0 
@@ -204,23 +202,27 @@ try {
                 WHEN p.type = 'arrivée' AND p.date BETWEEN :start_date AND :end_date
                 THEN p.agent_id 
                 ELSE NULL 
-            END) AS perfect_attendance
+            END) AS perfect_attendance,
+            COALESCE(SUM(CASE 
+                WHEN p.type = 'arrivée' AND p.heure > '08:30:00' AND p.date BETWEEN :start_date AND :end_date
+                THEN 1 
+                ELSE 0 
+            END), 0) AS total_late,
+            COALESCE(SUM(CASE 
+                WHEN p.type = 'depart' AND p.heure < '14:30:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure AND p.date BETWEEN :start_date AND :end_date
+                THEN 1 
+                ELSE 0 
+            END), 0) AS total_early_departure
         FROM presence p
         LEFT JOIN presence p2 ON p.agent_id = p2.agent_id 
             AND p.date = p2.date 
             AND p2.type = 'arrivée' 
             AND p.type = 'depart'
-        LEFT JOIN absence_justifiee aj ON p.agent_id = aj.agent_id
-            AND p.date BETWEEN aj.date_debut AND aj.date_fin
-        WHERE p.date BETWEEN :start_date AND :end_date
-        AND aj.id IS NULL
+        
     ";
     $stats_stmt = $pdo->prepare($stats_sql);
     $stats_stmt->execute([':start_date' => $start_date_str, ':end_date' => $end_date_str]);
     $stats = $stats_stmt->fetch(PDO::FETCH_ASSOC);
-
-    // Log pour déboguer les statistiques
-    error_log("Statistiques : " . print_r($stats, true));
 
     // Calculer le taux de présence moyen
     $total_possible_attendance = $total_agents * $working_days;
@@ -232,9 +234,6 @@ try {
         $agent['total_hours'] = $agent['regular_hours'] + $agent['overtime_hours'];
         return $agent;
     }, $agents);
-
-    // Log pour déboguer les agents formatés
-    error_log("Agents formatés : " . print_r($agents, true));
 
     // Réponse JSON
     echo json_encode([
@@ -248,7 +247,9 @@ try {
             'total_hours' => round($stats['total_regular_hours'] + $stats['total_overtime'], 1),
             'total_overtime' => round($stats['total_overtime'], 1),
             'avg_attendance_rate' => round($avg_attendance_rate, 1),
-            'perfect_attendance' => (int)$stats['perfect_attendance']
+            'perfect_attendance' => (int)$stats['perfect_attendance'],
+            'total_late' => (int)$stats['total_late'],
+            'total_early_departure' => (int)$stats['total_early_departure']
         ]
     ], JSON_NUMERIC_CHECK);
 } catch (Exception $e) {
@@ -257,3 +258,7 @@ try {
     echo json_encode(['error' => 'Erreur serveur: ' . $e->getMessage()]);
 }
 ?>
+
+
+
+

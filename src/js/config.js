@@ -16,6 +16,7 @@ export const pageTitles = {
   presence_content: "Gestion de Présence",
   absence_content: "Gestion d'Absence",
   performance_content: "Performance des Agents",
+  compte_content: "Compte",
   historique_content: "Historique des actions",
 };
 

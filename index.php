@@ -18,7 +18,6 @@ if (isLoggedIn()) {
     <title>DSI - Gestion de Présence</title>
     <!-- Inclusion directe de Tailwind (pré-compilé) - à remplacer par votre build pour la production -->
     <link href="./src/assets/css/tailwind.min.css" rel="stylesheet">
-    <!-- Polices personnalisées -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -444,6 +443,8 @@ if (isLoggedIn()) {
     </div>
 </footer>
     <script>
+       
+
         // Script pour l'animation du défilement doux
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function(e) {

@@ -1,4 +1,5 @@
 <?php
+
 // Démarrer la session uniquement si elle n'est pas active
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -38,6 +39,18 @@ try {
 } catch (PDOException $e) {
     error_log("Erreur dans agent_content.php (récupération bureaux) : " . $e->getMessage());
     $messages['errors'][] = "Erreur de connexion à la base de données.";
+}
+
+// Fonction pour formater les prénoms (2 premiers complets, les suivants abrégés)
+function formatPrenoms($prenoms, $maxPrenoms = 2) {
+    if (empty($prenoms)) return "";
+    $prenomList = array_filter(explode(' ', trim($prenoms)));
+    if (count($prenomList) <= $maxPrenoms) {
+        return implode(' ', $prenomList);
+    }
+    $displayedPrenoms = array_slice($prenomList, 0, $maxPrenoms);
+    $abbreviatedPrenoms = array_map(function($p) { return $p[0] . '.'; }, array_slice($prenomList, $maxPrenoms));
+    return implode(' ', array_merge($displayedPrenoms, $abbreviatedPrenoms));
 }
 
 // Gestion des requêtes POST (ajout ou modification)
@@ -274,7 +287,6 @@ $sql = "SELECT
     a.id,
     a.nom,
     a.prenom,
-    CONCAT(a.prenom, ' ', a.nom) AS nom_prenom,
     a.matricule,
     a.email,
     a.telephone,
@@ -285,12 +297,18 @@ $sql = "SELECT
 FROM agent a
 JOIN bureau b ON a.bureau_id = b.id
 JOIN service s ON b.service_id = s.id
-WHERE a.telephone LIKE :search OR CONCAT(a.prenom, ' ', a.nom) LIKE :search";
+WHERE a.telephone LIKE :search OR CONCAT(a.nom, ' ', a.prenom) LIKE :search";
 
 try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute(['search' => "%$search%"]);
     $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Formater nom_prenom pour chaque agent
+    foreach ($agents as &$agent) {
+        $agent['nom_prenom'] = trim($agent['nom'] . ' ' . formatPrenoms($agent['prenom']));
+    }
+    unset($agent); // Libérer la référence
 } catch (PDOException $e) {
     error_log("Erreur dans agent_content.php (récupération agents) : " . $e->getMessage());
     $messages['errors'][] = "Erreur lors de la récupération des agents.";
@@ -317,6 +335,7 @@ try {
     error_log("Erreur dans agent_content.php (récupération bureaux) : " . $e->getMessage());
     $messages['errors'][] = "Erreur lors de la récupération des bureaux.";
 }
+
 ?>
 
 <?php
@@ -381,6 +400,10 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                 class="add-agent-btn px-3 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all flex items-center justify-center">
                 <i class="fas fa-plus mr-2"></i> Ajouter un agent
             </button>
+            <button type="button"
+                class="mass-badges-btn px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all flex items-center justify-center">
+                <i class="fas fa-id-card-alt mr-2"></i> Générer Badges en Masse
+            </button>
         </div>
     </form>
 </div>
@@ -397,7 +420,7 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                     <?php else: ?>
                         <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
                             <span class="text-blue-600 font-medium text-xs">
-                                <?php echo strtoupper(substr($agent['prenom'], 0, 1) . substr($agent['nom'], 0, 1)); ?>
+                                <?php echo strtoupper(substr($agent['nom'], 0, 1) . (strlen($agent['prenom']) > 0 ? substr($agent['prenom'], 0, 1) : '')); ?>
                             </span>
                         </div>
                     <?php endif; ?>
@@ -427,7 +450,7 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                 </button>
                 <button class="qr-agent-btn px-2 py-1 text-xs sm:text-sm bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
                         data-id="<?= $agent['id'] ?>">
-                    <i class="fas fa-qrcode mr-1"></i> QR Code
+                    <i class="fas fa-id-card mr-1"></i> Badge
                 </button>
                 <button class="delete-agent-btn px-2 py-1 text-xs sm:text-sm bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                         data-id="<?= $agent['id'] ?>">
@@ -465,7 +488,7 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                             <?php else: ?>
                             <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                                 <span class="text-blue-600 font-medium text-xs">
-                                    <?php echo strtoupper(substr($agent['prenom'], 0, 1) . substr($agent['nom'], 0, 1)); ?>
+                                    <?php echo strtoupper(substr($agent['nom'], 0, 1) . (strlen($agent['prenom']) > 0 ? substr($agent['prenom'], 0, 1) : '')); ?>
                                 </span>
                             </div>
                             <?php endif; ?>
@@ -485,8 +508,8 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                             <i class="fas fa-edit"></i>
                         </button>
                         <button class="qr-agent-btn text-green-600 hover:text-green-900 transition-colors"
-                                data-id="<?= $agent['id'] ?>" title="Générer QR Code">
-                            <i class="fas fa-qrcode"></i>
+                                data-id="<?= $agent['id'] ?>" title="Générer Badge">
+                            <i class="fas fa-id-card"></i>
                         </button>
                         <button class="delete-agent-btn text-red-600 hover:text-red-900 transition-colors"
                                 data-id="<?= $agent['id'] ?>" title="Supprimer">
@@ -513,7 +536,7 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                 <i class="fas fa-times text-lg"></i>
             </button>
         </div>
-        <form id="agentForm" action="?page=agents_content" method="post" enctype="multipart/form-data" class="p-4 sm:p-6">
+        <form id="agentForm" action="?page=agents_content" method="POST" enctype="multipart/form-data" class="p-4 sm:p-6">
             <input type="hidden" id="agent_id" name="agent_id" value="">
             <input type="hidden" id="action" name="action" value="add">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -643,22 +666,22 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
 </div>
 
 <div id="qrModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-4 sm:p-6 transform transition-all duration-300 scale-95 opacity-0"
+    <div class="bg-white rounded-lg shadow-2xl w-full max-w-md sm:max-w-lg p-4 sm:p-6 transform transition-all duration-300 scale-95 opacity-0"
          id="qrModalContent">
-        <div class="border-b px-4 py-3 flex justify-between items-center">
+        <div class="border-b px-3 py-2 flex justify-between items-center">
             <h3 class="text-lg sm:text-xl font-semibold text-gray-800 flex items-center">
-                <i class="fas fa-qrcode mr-2 text-green-600"></i>
-                <span>QR Code de l'agent</span>
+                <i class="fas fa-id-card mr-2 text-green-600"></i>
+                <span>Badge de l'agent</span>
             </h3>
             <button class="close-modal text-gray-400 hover:text-gray-600 transition-colors">
                 <i class="fas fa-times text-lg"></i>
             </button>
         </div>
         <div class="p-4 sm:p-6">
-            <div class="flex justify-center mb-4">
-                <div id="qrCodeContainer" class="p-4 bg-white border border-gray-200 rounded-lg shadow-sm"></div>
+            <div class="flex justify-center mb-6 overflow-auto">
+                <div id="qrCodeContainer" class="bg-white border border-gray-200 rounded-lg shadow-sm" style="height: 413px; transform: scale(0.4); transform-origin: top ;"></div>
             </div>
-            <div class="text-center mb-6">
+            <div class="text-center mb-8">
                 <p id="qrAgentName" class="text-base sm:text-lg font-medium text-gray-800"></p>
                 <p id="qrAgentInfo" class="text-xs sm:text-sm text-gray-600"></p>
             </div>

@@ -1,7 +1,11 @@
 <?php
 require_once 'db_connect.php';
+require_once 'dompdf/autoload.inc.php';
 
-// Récupérer les filtres depuis la requête POST
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
+// Préparation des données filtrées (comme dans ton CSV original)
 $filters = $_POST ?: [];
 $date = $filters['date'] ?? '';
 $time_range = $filters['time_range'] ?? 'all';
@@ -13,7 +17,7 @@ $custom_start = $filters['custom_start'] ?? '';
 $custom_end = $filters['custom_end'] ?? '';
 $type = $filters['type'] ?? 'all';
 
-// Définir la plage horaire
+// Plage horaire
 $start_time = '00:00:00';
 $end_time = '23:59:59';
 if ($time_range === 'morning') {
@@ -27,13 +31,10 @@ if ($time_range === 'morning') {
     $end_time = $custom_end;
 }
 
-// Construire les conditions dynamiques
+// Conditions SQL dynamiques
 $conditions = [];
 $params = [];
-if (!empty($date)) {
-    $conditions[] = "p.date = :date";
-    $params[':date'] = $date;
-}
+if (!empty($date)) $conditions[] = "p.date = :date" and $params[':date'] = $date;
 if ($time_range !== 'all') {
     $conditions[] = "p.heure BETWEEN :start_time AND :end_time";
     $params[':start_time'] = $start_time;
@@ -67,7 +68,6 @@ if ($type !== 'all') {
 
 $where_clause = !empty($conditions) ? "WHERE " . implode(" AND ", $conditions) : "";
 
-// Requête pour récupérer les présences
 $sql = "
     SELECT p.date, 
            CONCAT(a.nom, ' ', a.prenom) AS nom_prenom,
@@ -91,34 +91,101 @@ $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Définir les en-têtes HTTP pour le téléchargement
-header('Content-Type: text/csv; charset=utf-8');
-header('Content-Disposition: attachment; filename="Liste_Presences_' . date('Ymd_His') . '.csv"');
-
-// Ajouter l'en-tête BOM pour UTF-8 (compatibilité Excel)
-echo "\xEF\xBB\xBF"; // BOM pour UTF-8
-
-// Créer un flux de sortie CSV
-$output = fopen('php://output', 'w');
-
-// Écrire les en-têtes du CSV
-$headers = ['Date', 'Nom Prénom', 'Service', 'Bureau', 'Heure', 'Type', 'Statut'];
-fputcsv($output, $headers, ';');
-
-// Écrire les données
-foreach ($results as $row) {
-    $line = [
-        date('d/m/Y', strtotime($row['date'])),
-        $row['nom_prenom'],
-        $row['service'],
-        $row['bureau'],
-        date('H:i', strtotime($row['heure'])),
-        $row['type'],
-        $row['statut']
-    ];
-    fputcsv($output, $line, ';');
+$logoPath = realpath('photos/');
+if (!$logoPath) {
+    die('Logo introuvable : vérifie le nom et le dossier assets/');
 }
 
-// Fermer le flux
-fclose($output);
+// Construction du HTML
+$html = '
+<style>
+    body { font-family: DejaVu Sans, sans-serif; 
+    font-size: 11px;
+     margin : 0; 
+     padding : 0;
+     }
+    .logo { width: 100px;}
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    th, td {
+        border: 1px solid black;
+        padding: 5px;
+        text-align: center;
+    }
+    th {
+        background-color: green;
+    }
+        .bordure-gauche{
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 15px;
+        display: flex;
+        flex-direction: column;
+        z-index: 100;
+        }
+       .ligne-verte {
+    background-color: green;
+    flex: 1;
+}
+.ligne-jaune {
+    background-color: yellow;
+    flex: 1;
+}
+.ligne-rouge {
+    background-color: red;
+    flex: 1;
+}
+       
+</style>
+     <div class="bordure-gauche">
+     <div class="ligne-verte"></div>
+     <div class="ligne-jaune"></div>
+     <div class="ligne-rouge"></div>
+     </div>
+    
+     <img src="file://' . $logoPath . '" class="logo"><br>
+    
+    <h2>Liste des présences</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Nom Prénom</th>
+            <th>Service</th>
+            <th>Bureau</th>
+            <th>Heure</th>
+            <th>Type</th>
+            <th>Statut</th>
+        </tr>
+    </thead>
+    <tbody>';
+
+foreach ($results as $row) {
+    $html .= '<tr>
+        <td>' . date('d/m/Y', strtotime($row['date'])) . '</td>
+        <td>' . htmlspecialchars($row['nom_prenom']) . '</td>
+        <td>' . htmlspecialchars($row['service']) . '</td>
+        <td>' . htmlspecialchars($row['bureau']) . '</td>
+        <td>' . date('H:i', strtotime($row['heure'])) . '</td>
+        <td>' . $row['type'] . '</td>
+        <td>' . $row['statut'] . '</td>
+    </tr>';
+}
+
+$html .= '</tbody></table>';
+
+// Création du PDF
+$options = new Options();
+$options->set('defaultFont', 'DejaVu Sans');
+$options->set('isRemoteEnabled', true);
+$dompdf = new Dompdf($options);
+$dompdf->loadHtml($html);
+$dompdf->setPaper('A4', 'landscape');
+$dompdf->render();
+$dompdf->stream('Liste_Presences_' . date('Ymd_His') . '.pdf', ["Attachment" => true]);
 exit;
