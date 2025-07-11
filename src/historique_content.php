@@ -1,9 +1,25 @@
 <?php
 require "db_connect.php";
+// Démarrer la session uniquement si elle n'est pas active
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Récupérer le paramètre de recherche
+$search = $_GET['search'] ?? '';
+
+// Vérifier si l'utilisateur est connecté
+$agent_conn = $_SESSION['user_id'] ?? null;
+$messages = ['success' => [], 'errors' => []];
+if (!$agent_conn) {
+    header("Location: login.php");
+    exit();
+}
 
 try {
     $stmt = $pdo->query("
         SELECT 
+            j.id as id,
             j.date_action as date_action,
             r.libelle as responsable,
             a.nom as nom,
@@ -25,8 +41,48 @@ try {
     error_log("Erreur dans fetch_historique.php : " . $e->getMessage());
     echo "<tr><td colspan='3'>Erreur lors du chargement de l'historique : " . htmlspecialchars($e->getMessage()) . "</td></tr>";
 }
-?>
 
+try {
+    $sql21 = "SELECT libelle FROM role ";
+    $stmt21 = $pdo->query($sql21);
+    $role= $stmt21->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log("Erreur dans agent_content.php (récupération services) : " . $e->getMessage());
+    $messages['errors'][] = "Erreur lors de la récupération des services.";
+}
+
+
+try {
+    $sql22 = "SELECT DISTINCT action_type FROM  journal_actions ";
+    $stmt22 = $pdo->query($sql22);
+    $action_type= $stmt22->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log("Erreur dans agent_content.php (récupération services) : " . $e->getMessage());
+    $messages['errors'][] = "Erreur lors de la récupération des services.";
+}
+
+$sql = "SELECT a.id, a.nom, a.prenom, CONCAT(a.prenom, ' ', a.nom) AS nom_prenom, a.matricule, a.email, a.telephone, a.photo, a.bureau_id, b.libele AS libele_bureau, s.libele AS libele_service FROM agent a JOIN bureau b ON a.bureau_id = b.id JOIN service s ON b.service_id = s.id WHERE a.telephone LIKE :search OR CONCAT(a.prenom, ' ', a.nom) LIKE :search";
+
+try {
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute(['search' => "%$search%"]);
+    $ag = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log("Erreur dans agent_content.php (récupération agents) : " . $e->getMessage());
+    $messages['errors'][] = "Erreur lors de la récupération des agents.";
+}
+
+
+?>
+<?php
+// Stocker les données dans un élément invisible pour le JS
+echo '<script id="actionData" type="application/json">' . json_encode($action, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
+echo '<script id="roleData" type="application/json">' . json_encode($role, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
+echo '<script id="agentData" type="application/json">' . json_encode($ag, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
+echo '<script id="actiontypeData" type="application/json">' . json_encode($action_type, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
+
+
+?>
 
 
 
@@ -50,42 +106,39 @@ try {
             </div>
         </div>
         <div>
-            <label for="filter_service" class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Filtrer par actions</label>
+            <label for="filter_actions" class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Filtrer par actions</label>
             <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <i class="fas fa-building text-gray-400"></i>
                 </div>
-                <select name="filter_actions" id="filter_service"
+                <select name="actions" id="filter_actions"
                     class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
                     <option value="">Toutes les actions</option>
+                     <?php foreach ($action_type as $action_type): ?>
+                    <option value="<?= htmlspecialchars($action_type['action_type'], ENT_QUOTES, 'UTF-8') ?>">
+                        <?= htmlspecialchars($action_type['action_type'], ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
         </div>
 
         <div>
-            <label for="filter_role" class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Filtrer par role</label>
+            <label for="filter_roles" class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Filtrer par role</label>
             <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <i class="fas fa-door-open text-gray-400"></i>
                 </div>
-                <select name="filter_date" id="filter_role"
+                <select name="roles" id="filter_roles"
                     class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
                     <option value="">Tous les roles</option>
+                     <?php foreach ($role as $role): ?>
+                    <option value="<?= htmlspecialchars($role['libelle'], ENT_QUOTES, 'UTF-8') ?>">
+                        <?= htmlspecialchars($role['libelle'], ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
         </div>
-        <div>
-            <label for="filter_date" class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Filtrer par date</label>
-            <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <i class="fas fa-door-open text-gray-400"></i>
-                </div>
-                <select name="filter_date" id="filter_date"
-                    class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
-                    <option value="">Toutes les dates</option>
-                </select>
-            </div>
-        </div>
+       
     
     </form>
 </div> 
@@ -95,7 +148,7 @@ try {
 
 
 
-<div class="hidden lg:block overflow-x-auto rounded-xl shadow-sm bg-white" id="compteTable">
+<div class="hidden lg:block overflow-x-auto rounded-xl shadow-sm bg-white" id="actionTable">
     <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50 text-gray-700 text-xs uppercase font-semibold">
             <tr>
@@ -133,29 +186,30 @@ try {
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 "><?= htmlspecialchars($action['responsable'], ENT_QUOTES, 'UTF-8') ?></td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 "><?= htmlspecialchars($action['action'], ENT_QUOTES, 'UTF-8') ?></td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500"><?= htmlspecialchars($action['date_action'], ENT_QUOTES, 'UTF-8') ?></td>
-                <td class="px-4 py-3 whitespace-nowrap text-right align-middle">
-    <button onclick="openModal('modal-<?= $row['id'] ?>')" 
-        class="bg-blue-600 text-white px-4 py-1 rounded hover:bg-blue-700 transition">
-        Voir détails
-    </button>
-</td>
+               <td class="px-4 py-3 whitespace-nowrap text-right">
+                            <button class=" detail-btn bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500" data-id="<?= $action['id'] ?>" title="detail">
+                                <i class="fas fa-eye mr-1"></i>
+                                Voir détails
+                            </button>
+                        </td>
             </tr>
             <?php endforeach; ?>
         </tbody>
     </table>
 </div>
 
-<?php /*
-<div id="modal-<?= $action['id'] ?>" 
-     class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center">
 
-    <div class="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 p-6 relative">
-        <button onclick="closeModal('modal-<?= $action['id'] ?>')" 
-            class="absolute top-2 right-3 text-gray-600 hover:text-red-500 text-xl font-bold">
+<div id="detailmodal" class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center">
+
+    <!-- Bouton de fermeture dans le coin supérieur gauche -->
+    <button onclick="closeModal('modal-<?= $action['id'] ?>')" 
+            class="absolute top-3 right-4 text-gray-500 hover:text-red-500 text-2xl font-bold transition duration-200 ease-in-out"
+            aria-label="Fermer le modal">
             &times;
         </button>
 
-        <h2 class="text-lg font-semibold mb-4">Détails de l'action</h2>
+    <div class="bg-white rounded-lg shadow-lg w-full max-w-md mx-4 p-6 relative">
+        <h2 class="text-lg font-semibold mb-4 bottom-6 text-blue-700">Détails de l'action</h2>
         <div class="text-sm text-gray-800 space-y-2">
             <?php
             $donnees = json_decode($action['details'], true);
@@ -171,5 +225,7 @@ try {
         </div>
     </div>
 </div>
-*/ ?>
+
+
+
 
