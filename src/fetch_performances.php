@@ -51,49 +51,41 @@ try {
 
     // Requête pour les agents
     $sql = "
-        SELECT 
-            a.id, a.nom, a.prenom, a.telephone, a.matricule,
-            b.libele AS bureau, s.libele AS service,
-            COUNT(DISTINCT CASE WHEN p.type = 'arrivée' AND p.date BETWEEN :start_date AND :end_date THEN p.date END) AS days_present,
-            COALESCE(SUM(CASE 
-                WHEN p.type = 'depart' AND p2.heure IS NOT NULL AND p2.heure < p.heure
-                THEN GREATEST(
-                    TIME_TO_SEC(TIMEDIFF(
-                        CASE WHEN p.heure <= '14:30:00' THEN p.heure ELSE '14:30:00' END, 
-                        CASE WHEN p2.heure < '07:00:00' THEN '07:00:00' ELSE p2.heure END
-                    )) / 3600, 
-                    0
-                )
-                ELSE 0 
-            END), 0) AS regular_hours,
-            COALESCE(SUM(CASE 
-                WHEN p.type = 'depart' AND p.heure > '14:30:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure
-                THEN GREATEST(
-                    TIME_TO_SEC(TIMEDIFF(p.heure, '14:30:00')) / 3600, 
-                    0
-                )
-                ELSE 0 
-            END), 0) AS overtime_hours,
-            COALESCE(SUM(CASE 
-                WHEN p.type = 'arrivée' AND p.heure > '08:30:00' AND p.date BETWEEN :start_date AND :end_date
-                THEN 1 
-                ELSE 0 
-            END), 0) AS late_count,
-            COALESCE(SUM(CASE 
-                WHEN p.type = 'depart' AND p.heure < '14:30:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure AND p.date BETWEEN :start_date AND :end_date
-                THEN 1 
-                ELSE 0 
-            END), 0) AS early_departure_count
-        FROM agent a
-        LEFT JOIN bureau b ON a.bureau_id = b.id
-        LEFT JOIN service s ON b.service_id = s.id
-        LEFT JOIN presence p ON a.id = p.agent_id AND p.date BETWEEN :start_date AND :end_date
-        LEFT JOIN presence p2 ON p.agent_id = p2.agent_id 
-            AND p.date = p2.date 
-            AND p2.type = 'arrivée' 
-            AND p.type = 'depart'
-      
-    ";
+    SELECT 
+        a.id, a.nom, a.prenom, a.telephone, a.matricule,  /* Remplacer a.email par a.telephone */
+        b.libele AS bureau, s.libele AS service,
+        COUNT(DISTINCT CASE WHEN p.type = 'arrivée' AND p.date BETWEEN :start_date AND :end_date THEN p.date END) AS days_present,
+        COALESCE(SUM(CASE 
+            WHEN p.type = 'depart' AND p2.heure IS NOT NULL AND p2.heure < p.heure
+            THEN GREATEST(
+                TIME_TO_SEC(TIMEDIFF(
+                    CASE WHEN p.heure <= '14:00:00' THEN p.heure ELSE '14:00:00' END, 
+                    p2.heure
+                )) / 3600, 
+                0
+            )
+            ELSE 0 
+        END), 0) AS regular_hours,
+        COALESCE(SUM(CASE 
+            WHEN p.type = 'depart' AND p.heure > '14:00:00' AND p2.heure IS NOT NULL AND p2.heure < p.heure
+            THEN GREATEST(
+                TIME_TO_SEC(TIMEDIFF(p.heure, '14:00:00')) / 3600, 
+                0
+            )
+            ELSE 0 
+        END), 0) AS overtime_hours
+    FROM agent a
+    LEFT JOIN bureau b ON a.bureau_id = b.id
+    LEFT JOIN service s ON b.service_id = s.id
+    LEFT JOIN presence p ON a.id = p.agent_id AND p.date BETWEEN :start_date AND :end_date
+    LEFT JOIN presence p2 ON p.agent_id = p2.agent_id 
+        AND p.date = p2.date 
+        AND p2.type = 'arrivée' 
+        AND p.type = 'depart'
+    LEFT JOIN absence aj ON a.id = aj.agent_id
+        AND p.date BETWEEN aj.date_debut AND aj.date_fin
+    WHERE aj.id IS NULL
+";
 
     $params = [':start_date' => $start_date_str, ':end_date' => $end_date_str];
 
@@ -151,7 +143,9 @@ try {
         LEFT JOIN bureau b ON a.bureau_id = b.id
         LEFT JOIN service s ON b.service_id = s.id
         LEFT JOIN presence p ON a.id = p.agent_id AND p.date BETWEEN :start_date AND :end_date
-      
+        LEFT JOIN absence aj ON a.id = aj.agent_id
+            AND p.date BETWEEN aj.date_debut AND aj.date_fin
+        WHERE aj.id IS NULL
     ";
     $count_params = [':start_date' => $start_date_str, ':end_date' => $end_date_str];
     if ($search) {
@@ -218,7 +212,10 @@ try {
             AND p.date = p2.date 
             AND p2.type = 'arrivée' 
             AND p.type = 'depart'
-        
+        LEFT JOIN absence aj ON p.agent_id = aj.agent_id
+            AND p.date BETWEEN aj.date_debut AND aj.date_fin
+        WHERE p.date BETWEEN :start_date AND :end_date
+        AND aj.id IS NULL
     ";
     $stats_stmt = $pdo->prepare($stats_sql);
     $stats_stmt->execute([':start_date' => $start_date_str, ':end_date' => $end_date_str]);
