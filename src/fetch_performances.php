@@ -87,7 +87,7 @@ try {
         AND p.date = p2.date 
         AND p2.type = 'arrivée' 
         AND p.type = 'depart'
-    LEFT JOIN absence_justifiee aj ON a.id = aj.agent_id
+    LEFT JOIN absence aj ON a.id = aj.agent_id
         AND p.date BETWEEN aj.date_debut AND aj.date_fin
     WHERE aj.id IS NULL
 ";
@@ -151,7 +151,7 @@ try {
         LEFT JOIN bureau b ON a.bureau_id = b.id
         LEFT JOIN service s ON b.service_id = s.id
         LEFT JOIN presence p ON a.id = p.agent_id AND p.date BETWEEN :start_date AND :end_date
-        LEFT JOIN absence_justifiee aj ON a.id = aj.agent_id
+        LEFT JOIN absence aj ON a.id = aj.agent_id
             AND p.date BETWEEN aj.date_debut AND aj.date_fin
         WHERE aj.id IS NULL
     ";
@@ -210,7 +210,7 @@ try {
             AND p.date = p2.date 
             AND p2.type = 'arrivée' 
             AND p.type = 'depart'
-        LEFT JOIN absence_justifiee aj ON p.agent_id = aj.agent_id
+        LEFT JOIN absence aj ON p.agent_id = aj.agent_id
             AND p.date BETWEEN aj.date_debut AND aj.date_fin
         WHERE p.date BETWEEN :start_date AND :end_date
         AND aj.id IS NULL
