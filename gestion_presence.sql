@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Hôte : 127.0.0.1
--- Généré le : ven. 20 juin 2025 à 13:23
+-- Généré le : sam. 12 juil. 2025 à 22:02
 -- Version du serveur : 10.4.32-MariaDB
--- Version de PHP : 8.2.12
+-- Version de PHP : 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -40,6 +40,16 @@ CREATE TABLE `absence` (
   `role_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Déchargement des données de la table `absence`
+--
+
+INSERT INTO `absence` (`id`, `agent_id`, `date_debut`, `date_fin`, `id_type_absence`, `justificatif`, `id_statut`, `date_saisie`, `description`, `role_id`) VALUES
+(1, 133, '2025-07-06', '2025-07-08', 2, 'Ordonnance', 3, '2025-07-07 06:51:16', NULL, 5),
+(2, 166, '2025-07-01', '2025-07-04', 3, 'dhefygr', 3, '2025-07-08 06:57:19', 'rshfudy', 8),
+(10, 166, '2025-07-01', '2025-07-04', 3, 'dhefygr', 3, '2025-07-08 06:56:52', 'rshfudy', 8),
+(133, 133, '2025-07-06', '2025-07-08', 2, 'Ordonnance', 3, '2025-07-07 06:51:16', NULL, 5);
+
 -- --------------------------------------------------------
 
 --
@@ -62,21 +72,18 @@ CREATE TABLE `agent` (
 --
 
 INSERT INTO `agent` (`id`, `matricule`, `nom`, `prenom`, `email`, `telephone`, `photo`, `bureau_id`) VALUES
-(38, '38O471S', 'OBISSI', 'Dan', 'dan@gmail.com', '064586471', NULL, 9),
 (125, '125E631D', 'EBONDO MALAKA', 'Listete Ornelia', 'lisetteebo@gmail.com', '064594242', NULL, 10),
 (126, '126M043S', 'MIME MASSAMBA NÉE MPANZOU', 'Mary Juliette', 'maryse@gmail.com', '0661296043', NULL, 20),
 (127, '127E955S', 'EBONDO NGOYA', 'Dominique Nouchika', NULL, '0641013955', NULL, 5),
 (128, '128M574S', 'MAMPOUYA FUADIANIMU', 'Amalthée Gabriella', NULL, '0649500574', NULL, 5),
 (129, '129O933S', 'OSSEY', 'Geneviève', NULL, '0662180933', NULL, 5),
 (130, '130T574S', 'TSIAKAKA MPEKANI', 'Destin Raice', NULL, '0684060574', NULL, 5),
-(131, '131O574S', 'OSSETE', 'Martial', NULL, '0684060574', NULL, 5),
 (132, '132Y631S', 'YOKA ABIA', 'Fabrice', NULL, '066935631', NULL, 5),
 (133, '133M210E', 'MBEMBA', 'Cele Hulson P.', 'celze@gmail.com', '065256210', NULL, 1),
 (134, '134M688E', 'MASSAMBA', 'Cassild Nhyven', NULL, '066364688', NULL, 2),
 (135, '135S688E', 'SAMBA', 'Jacky Landry', 'grafanachallenge@gmail.com', '066364688', NULL, 2),
 (136, '136M688E', 'MBEMBA MAYENGA', 'Manassé Jodel', NULL, '066364688', NULL, 2),
 (137, '137N723E', 'AGNIELE NKOUNKOU', 'Sage Dieu-Mercy', NULL, '0684752723', NULL, 4),
-(138, '138B723E', 'APOKO', 'Gladys Muriel', NULL, '0684752723', NULL, 4),
 (139, '139B019E', 'BOULANGA-LOSSINGO', 'Darstel Déchadron', NULL, '0686243019', NULL, 4),
 (140, '140O919E', 'OBILANGUNDA-AHOUE', 'Ornelle Martine', NULL, '0686753919', NULL, 4),
 (141, '141N098E', 'NKOUA EPALA', 'Clive Sorel', NULL, '069515098', NULL, 4),
@@ -98,7 +105,7 @@ INSERT INTO `agent` (`id`, `matricule`, `nom`, `prenom`, `email`, `telephone`, `
 (157, '157N131E', 'NGAMBOMI ASSOLENGUE ITOUA', 'Tessia Maryse', NULL, '0695328131', NULL, 8),
 (158, '158M950E', 'MFOULA', 'Jessica Patricia', NULL, '0690327950', NULL, 8),
 (159, '159B454E', 'BASSANGUI', 'Coureil Patrick', NULL, '068602454', NULL, 8),
-(160, '160K773E', 'KAPI', 'Evartiste Alfred', NULL, '069414773', NULL, 8),
+(160, NULL, 'KAPI', 'Evartiste Alfred', 'jean.dupont@exemple.com', '069414773', NULL, 8),
 (161, '161E650E', 'ENGA ANGALI', 'Pamela Blanvy', NULL, '0680228650', NULL, 14),
 (162, '162M851E', 'MASSAMBA', 'Thérésia', NULL, '0670251851', NULL, 14),
 (163, '163M985E', 'MAMPOUYA', 'Princess Pamela', NULL, '068059985', NULL, 14),
@@ -148,10 +155,15 @@ INSERT INTO `agent` (`id`, `matricule`, `nom`, `prenom`, `email`, `telephone`, `
 (207, '207O977I', 'OKANA GUEM', 'Ruth Lammanne', NULL, '068959977', NULL, 16),
 (208, '208O977I', 'OLIEKOU', 'Bruno Clevi', NULL, '068959977', NULL, 16),
 (209, '209P977I', 'POUCKOUA ONDELE', 'Isaac', NULL, '068959977', NULL, 16),
-(213, '148', 'ABANZ', 'Dayana', 'dayana@gmail.com', '065256218', NULL, 2),
-(214, '146', 'APIPI BOUYA', 'Pasteur', 'apipi@gmail.com', '065301549', NULL, 2),
+(213, '213A218E', 'ABANZ', 'Dayana', 'dayana@gmail.com', '065256218', NULL, 2),
 (215, '200M210E', 'pascal', 'lissouba', 'rosy.ikama.yeekola@gmail.com', '069530795', NULL, 2),
-(216, '216NR795E', 'NGOMA IKAMA', 'Rosy Perine', 'rosy.ikama.yeekola@gmail.com', '069530795', NULL, 2);
+(216, '216NR795E', 'NGOMA IKAMA', 'Rosy Perine', 'rosy.ikama.yeekola@gmail.com', '069530795', NULL, 2),
+(217, 'uhu', 'AMANDA', 'Athanadore', 'maryse@gmail.com', '065215558', NULL, 3),
+(225, '225M000', 'MBEMBA', 'Chancel', 'dan@gmail.com', '062310000', NULL, 4),
+(226, '226M000E', 'MBEMBA', 'Chancel', 'dan@gmail.com', '062310000', NULL, 4),
+(227, '227B000E', 'BIKOUTA', 'Martial', 'dan@gmail.com', '062310000', NULL, 8),
+(228, '228A333E', 'apipi', 'pasteur', 'apipi@gmail.com', '066452333', NULL, 2),
+(229, '', 'OBISSI', 'dan abasalom beni', 'dan@gmail.com', '056523211', NULL, 3);
 
 -- --------------------------------------------------------
 
@@ -180,9 +192,7 @@ INSERT INTO `bureau` (`id`, `libele`, `service_id`) VALUES
 (10, 'DIRECTRICE DES SYSTEMES D\'INFORMATION', 9),
 (11, 'Maintenance et gestion du parc informatique', 3),
 (12, 'Instance d’affectation', 1),
-(13, 'Instance d’affectation', 2),
 (14, 'Instance d’affectation', 3),
-(15, 'Instance d’affectation', 4),
 (16, 'Instance d’affectation globale', 8),
 (18, 'Chef de Service', 2),
 (19, 'Chef de Service', 3),
@@ -211,7 +221,30 @@ INSERT INTO `journal_actions` (`id`, `ag_id`, `action_type`, `donnees`, `date_ac
 (55, 11, 'ajouter', '{\"nom\":\"pascal\",\"prenom\":\"lissouba\",\"matricule\":\"200M210E\",\"email\":\"rosy.ikama.yeekola@gmail.com\",\"telephone\":\"069530795\",\"bureau_id\":\"2\"}', '2025-06-19 18:06:38', 0),
 (56, 11, 'modifier', '{\"nom\":\"MBEMBA\",\"prenom\":\"Cele Hulson P.\",\"matricule\":\"133M210E\",\"email\":\"celze@gmail.com\",\"telephone\":\"065256210\",\"bureau_id\":\"1\"}', '2025-06-19 20:14:04', 0),
 (57, 12, 'modifier', '{\"nom\":\"APIPI BOUYA\",\"prenom\":\"Pasteur\",\"matricule\":\"146\",\"email\":\"apipi@gmail.com\",\"telephone\":\"065301549\",\"bureau_id\":\"2\"}', '2025-06-19 21:10:47', 0),
-(58, 12, 'ajouter', '{\"nom\":\"NGOMA IKAMA\",\"prenom\":\"Rosy Perine\",\"matricule\":\"216NR795E\",\"email\":\"rosy.ikama.yeekola@gmail.com\",\"telephone\":\"069530795\",\"bureau_id\":\"2\"}', '2025-06-19 21:41:09', 0);
+(58, 12, 'ajouter', '{\"nom\":\"NGOMA IKAMA\",\"prenom\":\"Rosy Perine\",\"matricule\":\"216NR795E\",\"email\":\"rosy.ikama.yeekola@gmail.com\",\"telephone\":\"069530795\",\"bureau_id\":\"2\"}', '2025-06-19 21:41:09', 0),
+(59, 10, 'modifier', '{\"nom\":\"EBONDO MALAKA\",\"prenom\":\"Listete Ornelia\",\"matricule\":\"125E631D\",\"email\":\"lisetteebo@gmail.com\",\"telephone\":\"064594242\",\"bureau_id\":\"10\"}', '2025-07-03 07:30:00', 0),
+(60, 10, 'ajouter', '{\"nom\":\"AMANDA\",\"prenom\":\"Athanadore\",\"matricule\":\"uhu\",\"email\":\"maryse@gmail.com\",\"telephone\":\"065215558\",\"bureau_id\":\"3\"}', '2025-07-03 07:39:07', 0),
+(61, 13, 'supprimer', '{\"nom\":\"MBEMBA\",\"prenom\":\"Chancel\",\"matricule\":\"\",\"email\":\"dan@gmail.com\",\"telephone\":\"062224589\",\"bureau_id\":3}', '2025-07-03 12:45:14', 0),
+(62, 11, 'supprimer', '{\"nom\":\"MBEMBA\",\"prenom\":\"Chancel\",\"matricule\":null,\"email\":\"dan@gmail.com\",\"telephone\":\"065234569\",\"bureau_id\":4}', '2025-07-03 14:07:18', 0),
+(63, 11, 'supprimer', '{\"nom\":\"MBEMBA\",\"prenom\":\"Chancel\",\"matricule\":null,\"email\":\"dan@gmail.com\",\"telephone\":\"062310000\",\"bureau_id\":3}', '2025-07-03 14:07:28', 0),
+(64, 11, 'ajouter', '{\"nom\":\"MBEMBA\",\"prenom\":\"Chancel\",\"matricule\":\"224M000\",\"email\":\"dan@gmail.com\",\"telephone\":\"062310000\",\"bureau_id\":\"9\"}', '2025-07-03 14:11:26', 0),
+(65, 11, 'supprimer', '{\"nom\":\"MBEMBA\",\"prenom\":\"Chancel\",\"matricule\":\"224M000\",\"email\":\"dan@gmail.com\",\"telephone\":\"062310000\",\"bureau_id\":9}', '2025-07-03 14:11:52', 0),
+(66, 11, 'supprimer', '{\"nom\":\"MBEMBA\",\"prenom\":\"Chancel\",\"matricule\":null,\"email\":\"dan@gmail.com\",\"telephone\":\"062310000\",\"bureau_id\":5}', '2025-07-03 14:12:05', 0),
+(67, 11, 'supprimer', '{\"nom\":\"MBEMBA\",\"prenom\":\"Chancel\",\"matricule\":null,\"email\":\"dan@gmail.com\",\"telephone\":\"062310000\",\"bureau_id\":9}', '2025-07-03 14:12:16', 0),
+(68, 11, 'supprimer', '{\"nom\":\"MBEMBA\",\"prenom\":\"Chancel\",\"matricule\":null,\"email\":\"dan@gmail.com\",\"telephone\":\"062310000\",\"bureau_id\":5}', '2025-07-03 14:12:27', 0),
+(69, 11, 'ajouter', '{\"nom\":\"MBEMBA\",\"prenom\":\"Chancel\",\"matricule\":\"225M000\",\"email\":\"dan@gmail.com\",\"telephone\":\"062310000\",\"bureau_id\":\"4\"}', '2025-07-03 14:12:52', 0),
+(70, 11, 'ajouter', '{\"nom\":\"MBEMBA\",\"prenom\":\"Chancel\",\"matricule\":\"226M000E\",\"email\":\"dan@gmail.com\",\"telephone\":\"062310000\",\"bureau_id\":\"4\"}', '2025-07-03 14:14:02', 0),
+(71, 11, 'ajouter', '{\"nom\":\"BIKOUTA\",\"prenom\":\"Martial\",\"matricule\":\"227B000E\",\"email\":\"dan@gmail.com\",\"telephone\":\"062310000\",\"bureau_id\":\"8\"}', '2025-07-03 14:14:25', 0),
+(72, 11, 'supprimer', '{\"nom\":\"APIPI BOUYA\",\"prenom\":\"Pasteur\",\"matricule\":\"146\",\"email\":\"apipi@gmail.com\",\"telephone\":\"065301549\",\"bureau_id\":2}', '2025-07-07 15:26:33', 0),
+(73, 11, 'modifier', '{\"nom\":\"KAPI\",\"prenom\":\"Evartiste Alfred\",\"matricule\":null,\"email\":\"jean.dupont@exemple.com\",\"telephone\":\"069414773\",\"bureau_id\":\"8\"}', '2025-07-07 15:27:42', 0),
+(74, 11, 'supprimer', '{\"nom\":\"OBISSI\",\"prenom\":\"Dan\",\"matricule\":\"38O471S\",\"email\":\"dan@gmail.com\",\"telephone\":\"064586471\",\"bureau_id\":9}', '2025-07-07 15:32:19', 0),
+(75, 11, 'supprimer', '{\"nom\":\"APOKO\",\"prenom\":\"Gladys Muriel\",\"matricule\":\"138B723E\",\"email\":null,\"telephone\":\"0684752723\",\"bureau_id\":4}', '2025-07-07 15:33:27', 0),
+(76, 11, 'supprimer', '{\"nom\":\"OSSETE\",\"prenom\":\"Martial\",\"matricule\":\"131O574S\",\"email\":null,\"telephone\":\"0684060574\",\"bureau_id\":5}', '2025-07-07 15:34:20', 0),
+(77, 11, 'ajouter', '{\"nom\":\"apipi\",\"prenom\":\"pasteur\",\"matricule\":\"228A333E\",\"email\":\"apipi@gmail.com\",\"telephone\":\"066452333\",\"bureau_id\":\"2\"}', '2025-07-07 15:41:09', 0),
+(78, 11, 'ajouter', '{\"nom\":\"OBISSI\",\"prenom\":\"dan\",\"matricule\":\"229O211S\",\"email\":\"\",\"telephone\":\"056523211\",\"bureau_id\":\"3\"}', '2025-07-07 16:09:27', 0),
+(79, 11, 'modifier', '{\"nom\":\"OBISSI\",\"prenom\":\"dan abasalom\",\"matricule\":null,\"email\":\"\",\"telephone\":\"056523211\",\"bureau_id\":\"3\"}', '2025-07-07 16:09:43', 0),
+(80, 11, 'modifier', '{\"nom\":\"OBISSI\",\"prenom\":\"dan abasalom beni\",\"matricule\":\"\",\"email\":\"\",\"telephone\":\"056523211\",\"bureau_id\":\"3\"}', '2025-07-07 16:24:16', 0),
+(81, 11, 'modifier', '{\"nom\":\"OBISSI\",\"prenom\":\"dan abasalom beni\",\"matricule\":\"\",\"email\":\"dan@gmail.com\",\"telephone\":\"056523211\",\"bureau_id\":\"3\"}', '2025-07-07 16:27:32', 0);
 
 -- --------------------------------------------------------
 
@@ -284,11 +317,15 @@ INSERT INTO `presence` (`id`, `agent_id`, `date`, `heure`, `type`) VALUES
 (63, 125, '2025-05-14', '10:43:05', 'arrivée'),
 (64, 125, '2025-05-14', '10:44:12', 'depart'),
 (65, 125, '2025-05-16', '12:39:26', 'arrivée'),
-(66, 38, '2025-06-03', '08:34:00', 'arrivée'),
-(67, 38, '2025-06-03', '08:34:00', 'arrivée'),
-(68, 38, '2025-06-03', '08:34:00', 'arrivée'),
-(69, 38, '2025-06-02', '13:37:00', 'arrivée'),
-(70, 38, '2025-06-02', '14:38:00', 'depart');
+(71, 227, '2025-07-07', '11:47:00', 'arrivée'),
+(72, 126, '2025-07-17', '11:47:00', 'arrivée'),
+(73, 150, '2025-07-07', '13:32:59', 'arrivée'),
+(74, 148, '2025-07-07', '14:07:42', 'arrivée'),
+(75, 148, '2025-07-07', '14:12:30', 'depart'),
+(76, 228, '2025-07-07', '14:49:15', 'arrivée'),
+(77, 213, '2025-07-07', '15:05:42', 'arrivée'),
+(78, 213, '2025-07-07', '15:06:01', 'depart'),
+(79, 213, '2025-07-09', '10:21:00', 'arrivée');
 
 -- --------------------------------------------------------
 
@@ -488,13 +525,13 @@ ALTER TABLE `type_absence`
 -- AUTO_INCREMENT pour la table `absence`
 --
 ALTER TABLE `absence`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=134;
 
 --
 -- AUTO_INCREMENT pour la table `agent`
 --
 ALTER TABLE `agent`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=217;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=230;
 
 --
 -- AUTO_INCREMENT pour la table `bureau`
@@ -506,7 +543,7 @@ ALTER TABLE `bureau`
 -- AUTO_INCREMENT pour la table `journal_actions`
 --
 ALTER TABLE `journal_actions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=59;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=82;
 
 --
 -- AUTO_INCREMENT pour la table `login`
@@ -524,7 +561,7 @@ ALTER TABLE `permission`
 -- AUTO_INCREMENT pour la table `presence`
 --
 ALTER TABLE `presence`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=71;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=80;
 
 --
 -- AUTO_INCREMENT pour la table `role`
