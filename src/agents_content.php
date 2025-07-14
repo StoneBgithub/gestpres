@@ -58,7 +58,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
     $agent_id = isset($_POST['agent_id']) ? (int)$_POST['agent_id'] : null;
     $nom = trim($_POST['nom'] ?? '');
     $prenom = trim($_POST['prenoms'] ?? '');
-    // $matricule = trim($_POST['matricule'] ?? '');
     $email = trim($_POST['email'] ?? '');
     $telephone = trim($_POST['telephone'] ?? '');
     $bureau_id = trim($_POST['bureau_id'] ?? '');
@@ -66,8 +65,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
     // Vérification des champs obligatoires
     if (empty($nom)) $messages['errors'][] = "Le nom est requis.";
     if (empty($prenom)) $messages['errors'][] = "Le prénom est requis.";
-    // if (empty($matricule)) $messages['errors'][] = "Le matricule est requis.";
-    // if (empty($email)) $messages['errors'][] = "L'email est requis.";
     if (empty($telephone)) $messages['errors'][] = "Le téléphone est requis.";
     if (empty($bureau_id)) $messages['errors'][] = "Le bureau est requis.";
 
@@ -76,21 +73,22 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
         $messages['errors'][] = "L'email n'est pas valide.";
     }
 
-    // Vérification d'unicité du matricule
-    if (!empty($matricule)) {
+    // Récupérer le libellé du bureau
+    $libele_bureau = 'N/A';
+    if (!empty($bureau_id)) {
         try {
-            $stmt5 = $pdo->prepare("SELECT matricule FROM agent WHERE id != :id AND matricule = :matricule");
-            $stmt5->execute(['id' => $agent_id ?? 0, 'matricule' => $matricule]);
-            if ($stmt5->fetchColumn()) {
-                $messages['errors'][] = "Ce matricule est déjà utilisé.";
-            }
+            $stmt = $pdo->prepare("SELECT libele FROM bureau WHERE id = :id");
+            $stmt->execute(['id' => $bureau_id]);
+            $libele_bureau = $stmt->fetchColumn() ?: 'N/A';
         } catch (PDOException $e) {
-            error_log("Erreur dans agent_content.php (vérification matricule) : " . $e->getMessage());
-            $messages['errors'][] = "Erreur lors de la vérification du matricule.";
+            error_log("Erreur dans agent_content.php (récupération libele_bureau) : " . $e->getMessage());
+            $messages['errors'][] = "Erreur lors de la récupération du bureau.";
         }
     }
 
     // Gestion de la photo
+    $photoPath = null;
+    $hasNewPhoto = false;
     if (empty($messages['errors']) && isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
         $photoTmp = $_FILES['photo']['tmp_name'];
         $original = basename($_FILES['photo']['name']);
@@ -106,25 +104,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
 
         if (!move_uploaded_file($photoTmp, $photoPath)) {
             $messages['errors'][] = "Erreur lors du téléchargement de la photo.";
+        } else {
+            $hasNewPhoto = true;
         }
-
-        // Si modification, supprimer l'ancienne photo
-        if ($action === 'update' && $agent_id && empty($messages['errors'])) {
-            try {
-                $stmt = $pdo->prepare("SELECT photo FROM agent WHERE id = :id");
-                $stmt->execute(['id' => $agent_id]);
-                $oldPhoto = $stmt->fetchColumn();
-                
-                if ($oldPhoto && file_exists($oldPhoto)) {
-                    unlink($oldPhoto);
-                }
-            } catch (PDOException $e) {
-                error_log("Erreur dans agent_content.php (suppression ancienne photo) : " . $e->getMessage());
-                $messages['errors'][] = "Erreur lors de la gestion de l'ancienne photo.";
-            }
-        }
-    } else {
-        $photoPath = null;
     }
 
     // Ajout ou modification de l'agent
@@ -132,8 +114,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
         try {
             if ($action === 'add' && !$agent_id) {
                 // Ajout d’un nouvel agent
-                $stmt5 = $pdo->prepare("INSERT INTO agent (nom, prenom, email, telephone, photo, bureau_id)
-                                        VALUES ( :nom, :prenom, :email, :telephone, :photo, :bureau_id)");
+                $stmt5 = $pdo->prepare("
+                    INSERT INTO agent (nom, prenom, email, telephone, photo, bureau_id)
+                    VALUES (:nom, :prenom, :email, :telephone, :photo, :bureau_id)
+                ");
                 $stmt5->execute([
                     ':nom' => $nom,
                     ':prenom' => $prenom,
@@ -143,35 +127,35 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
                     ':bureau_id' => $bureau_id
                 ]);
 
+                // Récupérer l’ID de l’agent inséré
+                $agent_id = $pdo->lastInsertId();
 
-            // 2. Récupérer l’ID de l’agent inséré
-            $agent_id = $pdo->lastInsertId();
+                // Obtenir la première lettre du nom
+                $firstLetterNom = strtoupper(substr($nom, 0, 1));
 
-            // 3. Obtenir la première lettre du nom
-            $firstLetterNom = strtoupper(substr($nom, 0, 1));
+                // Obtenir les 3 derniers chiffres du téléphone
+                $last3Phone = substr(preg_replace('/\D/', '', $telephone), -3);
 
-            // 4. Obtenir les 3 derniers chiffres du téléphone
-            $last3Phone = substr(preg_replace('/\D/', '', $telephone), -3);
+                // Récupérer l’ID du service via le bureau
+                $recup_nom_service = $pdo->prepare("
+                    SELECT s.libele 
+                    FROM service s
+                    JOIN bureau b ON s.id = b.service_id
+                    WHERE b.id = :bureau_id
+                ");
+                $recup_nom_service->execute([':bureau_id' => $bureau_id]);
+                $service_nom = $recup_nom_service->fetchColumn();
+                $firstLetterService = $service_nom ? strtoupper(substr($service_nom, 0, 1)) : 'X';
 
-            // 5. Récupérer l’ID du service via le bureau
-            $recup_nom_service = $pdo->prepare("SELECT s.libele FROM service s
-                                    JOIN bureau b ON s.id = b.service_id
-                                    WHERE b.id = :bureau_id");
-            $recup_nom_service->execute([':bureau_id' => $bureau_id]);
-            $service_nom = $recup_nom_service->fetchColumn();
+                // Créer le matricule
+                $matricule = "{$agent_id}{$firstLetterNom}{$last3Phone}{$firstLetterService}";
 
-            $firstLetterService = $service_nom ? strtoupper(substr($service_nom, 0, 1)) : 'X';
-
-            // 6. Créer le matricule
-            $matricule = "{$agent_id}{$firstLetterNom}{$last3Phone}{$firstLetterService}";
-
-
-            // 7. Mettre à jour l’agent avec son matricule
-            $modif_matricule = $pdo->prepare("UPDATE agent SET matricule = :matricule WHERE id = :id");
-            $modif_matricule->execute([
-                ':matricule' => $matricule,
-                ':id' => $agent_id
-            ]);
+                // Mettre à jour l’agent avec son matricule
+                $modif_matricule = $pdo->prepare("UPDATE agent SET matricule = :matricule WHERE id = :id");
+                $modif_matricule->execute([
+                    ':matricule' => $matricule,
+                    ':id' => $agent_id
+                ]);
 
                 $messages['success'][] = "Agent enregistré avec succès.";
 
@@ -183,13 +167,15 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
                         'matricule' => $matricule,
                         'email' => $email,
                         'telephone' => $telephone,
-                        'bureau_id' => $bureau_id
+                        'bureau' => $libele_bureau
                     ], JSON_UNESCAPED_UNICODE);
                     $date_action = date('Y-m-d H:i:s');
                     $action_type = 'ajouter';
 
-                    $stmt = $pdo->prepare("INSERT INTO journal_actions (ag_id, action_type, donnees, date_action)
-                                           VALUES (:ag_id, :action_type, :donnees, :date_action)");
+                    $stmt = $pdo->prepare("
+                        INSERT INTO journal_actions (ag_id, action_type, donnees, date_action)
+                        VALUES (:ag_id, :action_type, :donnees, :date_action)
+                    ");
                     $stmt->execute([
                         ':ag_id' => $login_id,
                         ':action_type' => $action_type,
@@ -198,58 +184,126 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
                     ]);
                 }
             } elseif ($action === 'update' && $agent_id) {
+                // Récupérer l'état actuel de l'agent avant modification
+                $stmt = $pdo->prepare("
+                    SELECT nom, prenom, matricule, email, telephone, bureau_id, photo 
+                    FROM agent 
+                    WHERE id = :id
+                ");
+                $stmt->execute(['id' => $agent_id]);
+                $current_agent = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                $matricule = trim($_POST['matricule'] ?? '');
-                // Modification d’un agent existant
-                $sql = "UPDATE agent SET 
-                        matricule = :matricule, 
-                        nom = :nom, 
-                        prenom = :prenom, 
-                        email = :email, 
-                        telephone = :telephone, 
-                        bureau_id = :bureau_id";
-                if ($photoPath) {
-                    $sql .= ", photo = :photo";
-                }
-                $sql .= " WHERE id = :id";
+                if (!$current_agent) {
+                    $messages['errors'][] = "Erreur : Agent introuvable.";
+                } else {
+                    // Normaliser les valeurs pour la comparaison
+                    $current_nom = (string)($current_agent['nom'] ?? '');
+                    $current_prenom = (string)($current_agent['prenom'] ?? '');
+                    $current_email = (string)($current_agent['email'] ?? '');
+                    $current_telephone = (string)($current_agent['telephone'] ?? '');
+                    $current_bureau_id = (string)($current_agent['bureau_id'] ?? '');
+                    $current_photo = (string)($current_agent['photo'] ?? '');
 
-                $stmt5 = $pdo->prepare($sql);
-                $params = [
-                    'id' => $agent_id,
-                    'matricule' => $matricule,
-                    'nom' => $nom,
-                    'prenom' => $prenom,
-                    'email' => $email,
-                    'telephone' => $telephone,
-                    'bureau_id' => $bureau_id
-                ];
-                if ($photoPath) {
-                    $params['photo'] = $photoPath;
-                }
-                $stmt5->execute($params);
-                $messages['success'][] = "Agent mis à jour avec succès.";
+                    $new_nom = (string)$nom;
+                    $new_prenom = (string)$prenom;
+                    $new_email = (string)$email;
+                    $new_telephone = (string)$telephone;
+                    $new_bureau_id = (string)$bureau_id;
+                    $new_photo = $hasNewPhoto ? (string)$photoPath : $current_photo;
 
-                // Journalisation
-                if ($login_id) {
-                    $donnees = json_encode([
-                        'nom' => $nom,
-                        'prenom' => $prenom,
-                        'matricule' => $matricule,
-                        'email' => $email,
-                        'telephone' => $telephone,
-                        'bureau_id' => $bureau_id
-                    ], JSON_UNESCAPED_UNICODE);
-                    $date_action = date('Y-m-d H:i:s');
-                    $action_type = 'modifier';
+                    // Débogage : enregistrer les valeurs pour inspection
+                    error_log("agent_content.php (update) - Current Agent: " . json_encode($current_agent));
+                    error_log("agent_content.php (update) - POST Data: " . json_encode($_POST));
+                    error_log("agent_content.php (update) - New Photo: " . ($hasNewPhoto ? $photoPath : 'No new photo'));
 
-                    $stmt = $pdo->prepare("INSERT INTO journal_actions (ag_id, action_type, donnees, date_action)
-                                           VALUES (:ag_id, :action_type, :donnees, :date_action)");
-                    $stmt->execute([
-                        ':ag_id' => $login_id,
-                        ':action_type' => $action_type,
-                        ':donnees' => $donnees,
-                        ':date_action' => $date_action,
-                    ]);
+                    // Comparer les nouvelles valeurs avec les anciennes
+                    $changes = [];
+                    if ($new_nom !== $current_nom) {
+                        $changes['nom'] = ['old' => $current_nom, 'new' => $new_nom];
+                    }
+                    if ($new_prenom !== $current_prenom) {
+                        $changes['prenom'] = ['old' => $current_prenom, 'new' => $new_prenom];
+                    }
+                    if ($new_email !== $current_email) {
+                        $changes['email'] = ['old' => $current_email ?: 'N/A', 'new' => $new_email];
+                    }
+                    if ($new_telephone !== $current_telephone) {
+                        $changes['telephone'] = ['old' => $current_telephone, 'new' => $new_telephone];
+                    }
+                    if ($new_bureau_id !== $current_bureau_id) {
+                        // Récupérer l'ancien libellé du bureau
+                        $stmt_old_bureau = $pdo->prepare("SELECT libele FROM bureau WHERE id = :id");
+                        $stmt_old_bureau->execute(['id' => $current_bureau_id]);
+                        $old_libele_bureau = $stmt_old_bureau->fetchColumn() ?: 'N/A';
+                        $changes['bureau'] = ['old' => $old_libele_bureau, 'new' => $libele_bureau];
+                    }
+                    if ($hasNewPhoto && $new_photo !== $current_photo) {
+                        $changes['photo'] = ['old' => $current_photo ?: 'Aucune', 'new' => $new_photo];
+                    }
+
+                    // Débogage : enregistrer les changements détectés
+                    error_log("agent_content.php (update) - Changes: " . json_encode($changes));
+
+                    // Si aucune modification n'a été détectée
+                    if (empty($changes)) {
+                        $messages['success'][] = "Aucune donnée modifiée.";
+                    } else {
+                        // Supprimer l'ancienne photo si une nouvelle est téléchargée
+                        if ($hasNewPhoto && $current_photo && file_exists($current_photo)) {
+                            unlink($current_photo);
+                        }
+
+                        // Modification de l'agent
+                        $sql = "UPDATE agent SET 
+                                nom = :nom, 
+                                prenom = :prenom, 
+                                email = :email, 
+                                telephone = :telephone, 
+                                bureau_id = :bureau_id";
+                        if ($hasNewPhoto) {
+                            $sql .= ", photo = :photo";
+                        }
+                        $sql .= " WHERE id = :id";
+
+                        $stmt5 = $pdo->prepare($sql);
+                        $params = [
+                            'id' => $agent_id,
+                            'nom' => $nom,
+                            'prenom' => $prenom,
+                            'email' => $email,
+                            'telephone' => $telephone,
+                            'bureau_id' => $bureau_id
+                        ];
+                        if ($hasNewPhoto) {
+                            $params['photo'] = $photoPath;
+                        }
+                        $stmt5->execute($params);
+                        $messages['success'][] = "Agent mis à jour avec succès.";
+
+                        // Journalisation
+                        if ($login_id) {
+                            $donnees = json_encode([
+                                'nom' => $nom,
+                                'prenom' => $prenom,
+                                'matricule' => $current_agent['matricule'],
+                                'bureau' => $libele_bureau,
+                                'changes' => $changes
+                            ], JSON_UNESCAPED_UNICODE);
+                            $date_action = date('Y-m-d H:i:s');
+                            $action_type = 'modifier';
+
+                            $stmt = $pdo->prepare("
+                                INSERT INTO journal_actions (ag_id, action_type, donnees, date_action)
+                                VALUES (:ag_id, :action_type, :donnees, :date_action)
+                            ");
+                            $stmt->execute([
+                                ':ag_id' => $login_id,
+                                ':action_type' => $action_type,
+                                ':donnees' => $donnees,
+                                ':date_action' => $date_action,
+                            ]);
+                        }
+                    }
                 }
             }
         } catch (PDOException $e) {
@@ -266,12 +320,20 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])
 
     try {
         // Récupérer les informations de l'agent avant suppression
-        $stmt = $pdo->prepare("SELECT nom, prenom, matricule, email, telephone, bureau_id, photo 
-                               FROM agent WHERE id = :id");
+        $stmt = $pdo->prepare("
+            SELECT nom, prenom, matricule, email, telephone, bureau_id, photo 
+            FROM agent 
+            WHERE id = :id
+        ");
         $stmt->execute(['id' => $id]);
         $agent = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($agent) {
+            // Récupérer le libellé du bureau
+            $stmt_bureau = $pdo->prepare("SELECT libele FROM bureau WHERE id = :id");
+            $stmt_bureau->execute(['id' => $agent['bureau_id']]);
+            $libele_bureau = $stmt_bureau->fetchColumn() ?: 'N/A';
+
             // Supprimer l'enregistrement de l'agent
             $stmt4 = $pdo->prepare("DELETE FROM agent WHERE id = :id");
             $stmt4->execute(['id' => $id]);
@@ -291,13 +353,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])
                     'matricule' => $agent['matricule'],
                     'email' => $agent['email'],
                     'telephone' => $agent['telephone'],
-                    'bureau_id' => $agent['bureau_id']
+                    'bureau' => $libele_bureau
                 ], JSON_UNESCAPED_UNICODE);
                 $date_action = date('Y-m-d H:i:s');
                 $action_type = 'supprimer';
 
-                $stmt = $pdo->prepare("INSERT INTO journal_actions (ag_id, action_type, donnees, date_action)
-                                       VALUES (:ag_id, :action_type, :donnees, :date_action)");
+                $stmt = $pdo->prepare("
+                    INSERT INTO journal_actions (ag_id, action_type, donnees, date_action)
+                    VALUES (:ag_id, :action_type, :donnees, :date_action)
+                ");
                 $stmt->execute([
                     ':ag_id' => $login_id,
                     ':action_type' => $action_type,
@@ -315,21 +379,23 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id'])
 }
 
 // Requête pour récupérer les agents
-$sql = "SELECT 
-    a.id,
-    a.nom,
-    a.prenom,
-    a.matricule,
-    a.email,
-    a.telephone,
-    a.photo,
-    a.bureau_id,
-    b.libele AS libele_bureau,
-    s.libele AS libele_service
-FROM agent a
-JOIN bureau b ON a.bureau_id = b.id
-JOIN service s ON b.service_id = s.id
-WHERE a.telephone LIKE :search OR CONCAT(a.nom, ' ', a.prenom) LIKE :search";
+$sql = "
+    SELECT 
+        a.id,
+        a.nom,
+        a.prenom,
+        a.matricule,
+        a.email,
+        a.telephone,
+        a.photo,
+        a.bureau_id,
+        b.libele AS libele_bureau,
+        s.libele AS libele_service
+    FROM agent a
+    JOIN bureau b ON a.bureau_id = b.id
+    JOIN service s ON b.service_id = s.id
+    WHERE a.telephone LIKE :search OR CONCAT(a.nom, ' ', a.prenom) LIKE :search
+";
 
 try {
     $stmt = $pdo->prepare($sql);
@@ -358,9 +424,11 @@ try {
 
 // Requête pour récupérer les bureaux
 try {
-    $sql3 = "SELECT b.libele, b.service_id, s.libele AS service_libele 
-             FROM bureau b 
-             JOIN service s ON b.service_id = s.id";
+    $sql3 = "
+        SELECT b.libele, b.service_id, s.libele AS service_libele 
+        FROM bureau b 
+        JOIN service s ON b.service_id = s.id
+    ";
     $stmt3 = $pdo->query($sql3);
     $bureaux = $stmt3->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -454,11 +522,11 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                     <img src="<?= htmlspecialchars($agent['photo'], ENT_QUOTES, 'UTF-8') ?>" alt="Photo de profil"
                         class="rounded-full object-cover">
                     <?php else: ?>
-                        <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span class="text-blue-600 font-medium text-xs">
-                                <?php echo strtoupper(substr($agent['nom'], 0, 1) . (strlen($agent['prenom']) > 0 ? substr($agent['prenom'], 0, 1) : '')); ?>
-                            </span>
-                        </div>
+                    <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                        <span class="text-blue-600 font-medium text-xs">
+                            <?php echo strtoupper(substr($agent['nom'], 0, 1) . (strlen($agent['prenom']) > 0 ? substr($agent['prenom'], 0, 1) : '')); ?>
+                        </span>
+                    </div>
                     <?php endif; ?>
                 </div>
                 <div>
@@ -486,8 +554,9 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                     data-id="<?= $agent['id'] ?>">
                     <i class="fas fa-edit mr-1"></i> Modifier
                 </button>
-                <button class="qr-agent-btn px-2 py-1 text-xs sm:text-sm bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
-                        data-id="<?= $agent['id'] ?>">
+                <button
+                    class="qr-agent-btn px-2 py-1 text-xs sm:text-sm bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors"
+                    data-id="<?= $agent['id'] ?>">
                     <i class="fas fa-id-card mr-1"></i> Badge
                 </button>
                 <button
@@ -551,7 +620,7 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                             <i class="fas fa-edit"></i>
                         </button>
                         <button class="qr-agent-btn text-green-600 hover:text-green-900 transition-colors"
-                                data-id="<?= $agent['id'] ?>" title="Générer Badge">
+                            data-id="<?= $agent['id'] ?>" title="Générer Badge">
                             <i class="fas fa-id-card"></i>
                         </button>
                         <button class="delete-agent-btn text-red-600 hover:text-red-900 transition-colors"
@@ -606,18 +675,6 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
                             class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
                     </div>
                 </div>
-                <!-- Matricule -->
-                <!-- <div>
-                    <label for="matricule"
-                        class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Matricule</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fas fa-id-badge text-gray-400"></i>
-                        </div>
-                        <input type="text" name="matricule" id="matricule" required
-                            class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
-                    </div>
-                </div> -->
                 <!-- Email -->
                 <div>
                     <label for="email" class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -716,7 +773,7 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
 
 <div id="qrModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
     <div class="bg-white rounded-lg shadow-2xl w-full max-w-md sm:max-w-lg p-4 sm:p-6 transform transition-all duration-300 scale-95 opacity-0"
-         id="qrModalContent">
+        id="qrModalContent">
         <div class="border-b px-3 py-2 flex justify-between items-center">
             <h3 class="text-lg sm:text-xl font-semibold text-gray-800 flex items-center">
                 <i class="fas fa-id-card mr-2 text-green-600"></i>
@@ -728,7 +785,8 @@ echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux,
         </div>
         <div class="p-4 sm:p-6">
             <div class="flex justify-center mb-6 overflow-auto">
-                <div id="qrCodeContainer" class="bg-white border border-gray-200 rounded-lg shadow-sm" style="height: 413px; transform: scale(0.4); transform-origin: top ;"></div>
+                <div id="qrCodeContainer" class="bg-white border border-gray-200 rounded-lg shadow-sm"
+                    style="height: 413px; transform: scale(0.4); transform-origin: top ;"></div>
             </div>
             <div class="text-center mb-8">
                 <p id="qrAgentName" class="text-base sm:text-lg font-medium text-gray-800"></p>

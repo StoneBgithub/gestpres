@@ -1,159 +1,153 @@
-// Variables globales
 let actionData = [];
 let roleData = [];
 let agentData = [];
 let actionTypeData = [];
 let filteredData = [];
 
-// Variables pour la gestion des filtres
 let currentFilters = {
-    search: '',
-    actions: '',
-    roles: ''
+  search: "",
+  actions: "",
+  roles: "",
 };
 
-// Fonction d'initialisation principale
 function initHistoriqueActions() {
-    console.log('Initialisation de l\'historique des actions...');
-    
-    // Charger les données
-    loadDataFromScripts();
-    
-    // Configurer les événements
-    setupEventListeners();
-    
-    // Initialiser l'affichage
-    applyFilters();
-    
-    console.log('Historique des actions initialisé');
+  console.log("Initialisation de l'historique des actions...");
+
+  loadDataFromScripts();
+  setupEventListeners();
+  applyFilters();
+
+  console.log("Historique des actions initialisé");
 }
 
-// Fonction pour charger les données depuis les scripts JSON
 function loadDataFromScripts() {
-    try {
-        // Récupérer les données depuis les scripts JSON intégrés
-        const actionScript = document.getElementById('actionData');
-        const roleScript = document.getElementById('roleData');
-        const agentScript = document.getElementById('agentData');
-        const actionTypeScript = document.getElementById('actiontypeData');
+  try {
+    const actionScript = document.getElementById("actionData");
+    const roleScript = document.getElementById("roleData");
+    const agentScript = document.getElementById("agentData");
+    const actionTypeScript = document.getElementById("actiontypeData");
 
-        if (actionScript && actionScript.textContent) {
-            actionData = JSON.parse(actionScript.textContent);
-        }
-        if (roleScript && roleScript.textContent) {
-            roleData = JSON.parse(roleScript.textContent);
-        }
-        if (agentScript && agentScript.textContent) {
-            agentData = JSON.parse(agentScript.textContent);
-        }
-        if (actionTypeScript && actionTypeScript.textContent) {
-            actionTypeData = JSON.parse(actionTypeScript.textContent);
-        }
-
-        // Initialiser les données filtrées
-        filteredData = [...actionData];
-        
-        console.log('Données chargées:', {
-            actions: actionData.length,
-            roles: roleData.length,
-            agents: agentData.length,
-            actionTypes: actionTypeData.length
-        });
-        
-    } catch (error) {
-        console.error('Erreur lors du chargement des données:', error);
-        actionData = [];
-        filteredData = [];
+    if (actionScript && actionScript.textContent) {
+      actionData = JSON.parse(actionScript.textContent);
     }
+    if (roleScript && roleScript.textContent) {
+      roleData = JSON.parse(roleScript.textContent);
+    }
+    if (agentScript && agentScript.textContent) {
+      agentData = JSON.parse(agentScript.textContent);
+    }
+    if (actionTypeScript && actionTypeScript.textContent) {
+      actionTypeData = JSON.parse(actionTypeScript.textContent);
+    }
+
+    filteredData = [...actionData];
+
+    console.log("Données chargées:", {
+      actions: actionData.length,
+      roles: roleData.length,
+      agents: agentData.length,
+      actionTypes: actionTypeData.length,
+    });
+  } catch (error) {
+    console.error("Erreur lors du chargement des données:", error);
+    actionData = [];
+    filteredData = [];
+  }
 }
 
-// Configuration des écouteurs d'événements
 function setupEventListeners() {
-    // Écouteur pour la recherche
-    const searchInput = document.getElementById('search');
-    if (searchInput) {
-        searchInput.addEventListener('input', function(e) {
-            currentFilters.search = e.target.value.toLowerCase();
-            applyFilters();
-        });
-    }
-
-    // Écouteurs pour les filtres
-    const filterActions = document.getElementById('filter_actions');
-    if (filterActions) {
-        filterActions.addEventListener('change', function(e) {
-            currentFilters.actions = e.target.value;
-            applyFilters();
-        });
-    }
-
-    const filterRoles = document.getElementById('filter_roles');
-    if (filterRoles) {
-        filterRoles.addEventListener('change', function(e) {
-            currentFilters.roles = e.target.value;
-            applyFilters();
-        });
-    }
-
-    // Écouteur pour fermer le modal
-    const modal = document.getElementById('detailmodal');
-    if (modal) {
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) {
-                closeDetailModal();
-            }
-        });
-    }
-
-    // Écouteur pour la touche Échap
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            closeDetailModal();
-        }
+  const searchInput = document.getElementById("search");
+  let debounceTimeout;
+  if (searchInput) {
+    searchInput.addEventListener("input", function (e) {
+      clearTimeout(debounceTimeout);
+      debounceTimeout = setTimeout(() => {
+        currentFilters.search = e.target.value.toLowerCase();
+        applyFilters();
+      }, 300);
     });
+  }
+
+  const filterActions = document.getElementById("filter_actions");
+  if (filterActions) {
+    filterActions.addEventListener("change", function (e) {
+      currentFilters.actions = e.target.value;
+      applyFilters();
+    });
+  }
+
+  const filterRoles = document.getElementById("filter_roles");
+  if (filterRoles) {
+    filterRoles.addEventListener("change", function (e) {
+      currentFilters.roles = e.target.value;
+      applyFilters();
+    });
+  }
+
+  const modal = document.getElementById("detailmodal");
+  if (modal) {
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal) {
+        closeDetailModal();
+      }
+    });
+  }
+
+  const closeButton = document.querySelector(".close-modal");
+  if (closeButton) {
+    closeButton.addEventListener("click", function (e) {
+      e.preventDefault();
+      console.log("Clic sur le bouton de fermeture");
+      closeDetailModal();
+    });
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      closeDetailModal();
+    }
+  });
 }
 
-// Fonction pour appliquer les filtres
 function applyFilters() {
-    if (!Array.isArray(actionData)) {
-        console.error('actionData n\'est pas un tableau');
-        return;
-    }
+  if (!Array.isArray(actionData)) {
+    console.error("actionData n'est pas un tableau");
+    return;
+  }
 
-    filteredData = actionData.filter(action => {
-        // Filtre par recherche (nom/prénom)
-        const matchesSearch = !currentFilters.search || 
-            (action.nom_prenom && action.nom_prenom.toLowerCase().includes(currentFilters.search));
+  filteredData = actionData.filter((action) => {
+    const matchesSearch =
+      !currentFilters.search ||
+      (action.nom_prenom &&
+        action.nom_prenom.toLowerCase().includes(currentFilters.search));
+    const matchesAction =
+      !currentFilters.actions || action.action === currentFilters.actions;
+    const matchesRole =
+      !currentFilters.roles || action.responsable === currentFilters.roles;
 
-        // Filtre par type d'action
-        const matchesAction = !currentFilters.actions || 
-            action.action === currentFilters.actions;
+    return matchesSearch && matchesAction && matchesRole;
+  });
 
-        // Filtre par rôle
-        const matchesRole = !currentFilters.roles || 
-            action.responsable === currentFilters.roles;
-
-        return matchesSearch && matchesAction && matchesRole;
-    });
-
-    console.log('Filtres appliqués:', currentFilters, 'Résultats:', filteredData.length);
-    updateTable();
+  console.log(
+    "Filtres appliqués:",
+    currentFilters,
+    "Résultats:",
+    filteredData.length
+  );
+  updateTable();
 }
 
-// Fonction pour mettre à jour le tableau
 function updateTable() {
-    const tableBody = document.querySelector('#actionTable tbody');
-    if (!tableBody) {
-        console.error('Corps du tableau non trouvé');
-        return;
-    }
+  const tableBody = document.querySelector("#actionTable tbody");
+  if (!tableBody) {
+    console.error("Corps du tableau non trouvé");
+    return;
+  }
 
-    // Vider le tableau
-    tableBody.innerHTML = '';
+  tableBody.innerHTML = "";
 
-    // Vérifier s'il y a des données
-    if (filteredData.length === 0) {
-        tableBody.innerHTML = `
+  if (filteredData.length === 0) {
+    tableBody.innerHTML = `
             <tr>
                 <td colspan="5" class="px-4 py-8 text-center text-gray-500">
                     <div class="flex flex-col items-center">
@@ -164,62 +158,65 @@ function updateTable() {
                 </td>
             </tr>
         `;
-        return;
+    return;
+  }
+
+  filteredData.forEach((action) => {
+    const row = createTableRow(action);
+    if (row) {
+      tableBody.appendChild(row);
     }
+  });
 
-    // Créer les lignes du tableau
-    filteredData.forEach(action => {
-        const row = createTableRow(action);
-        if (row) {
-            tableBody.appendChild(row);
-        }
-    });
-
-    // Reconfigurer les boutons de détails
-    setupDetailButtons();
+  setupDetailButtons();
 }
 
-// Fonction pour créer une ligne du tableau
 function createTableRow(action) {
-    if (!action) return null;
+  if (!action) return null;
 
-    const row = document.createElement('tr');
-    row.className = 'hover:bg-gray-50 transition-colors';
+  const row = document.createElement("tr");
+  row.className = "hover:bg-gray-50 transition-colors";
 
-    // Générer les initiales
-    const initials = getInitials(action.nom_prenom || '');
-    
-    // Créer le contenu de la photo/avatar
-    let photoContent = '';
-    if (action.photo && action.photo.trim() !== '') {
-        photoContent = `
+  const initials = getInitials(action.nom_prenom || "");
+
+  let photoContent = "";
+  if (action.photo && action.photo.trim() !== "") {
+    photoContent = `
             <img src="${escapeHtml(action.photo)}" 
-                 alt="${escapeHtml(action.nom_prenom || '')}" 
+                 alt="${escapeHtml(action.nom_prenom || "")}" 
                  class="w-10 h-10 rounded-full object-cover"
                  onerror="this.outerHTML='<div class=\\'w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center\\'><span class=\\'text-blue-600 font-medium text-xs\\'>${initials}</span></div>'">
         `;
-    } else {
-        photoContent = `
+  } else {
+    photoContent = `
             <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                 <span class="text-blue-600 font-medium text-xs">${initials}</span>
             </div>
         `;
-    }
+  }
 
-    row.innerHTML = `
+  row.innerHTML = `
         <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-center align-middle">
             <div class="flex items-center">
                 <div class="h-10 w-10 rounded-full flex items-center justify-center mr-3 border">
                     ${photoContent}
                 </div>
                 <div>
-                    <div class="text-sm font-medium text-gray-900">${escapeHtml(action.nom_prenom || '')}</div>
+                    <div class="text-sm font-medium text-gray-900">${escapeHtml(
+                      action.nom_prenom || ""
+                    )}</div>
                 </div>
             </div>
         </td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${escapeHtml(action.responsable || '')}</td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${escapeHtml(action.action || '')}</td>
-        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${escapeHtml(formatDate(action.date_action))}</td>
+        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${escapeHtml(
+          action.responsable || ""
+        )}</td>
+        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${escapeHtml(
+          action.action || ""
+        )}</td>
+        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${escapeHtml(
+          formatDate(action.date_action)
+        )}</td>
         <td class="px-4 py-3 whitespace-nowrap text-right">
             <button class="detail-btn bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500" 
                     data-id="${action.id}" 
@@ -230,159 +227,228 @@ function createTableRow(action) {
         </td>
     `;
 
-    return row;
+  return row;
 }
 
-// Fonction pour configurer les boutons de détails
 function setupDetailButtons() {
-    const detailButtons = document.querySelectorAll('.detail-btn');
-    detailButtons.forEach(button => {
-        button.onclick = function(e) {
-            e.preventDefault();
-            const actionId = this.getAttribute('data-id');
-            const action = actionData.find(a => a.id == actionId);
-            
-            if (action) {
-                openDetailModal(action);
-            } else {
-                console.error('Action non trouvée:', actionId);
-            }
-        };
-    });
-}
+  const detailButtons = document.querySelectorAll(".detail-btn");
+  console.log("Boutons de détails trouvés:", detailButtons.length);
+  detailButtons.forEach((button) => {
+    button.onclick = function (e) {
+      e.preventDefault();
+      const actionId = this.getAttribute("data-id");
+      const action = actionData.find((a) => a.id == actionId);
 
-// Fonction pour ouvrir le modal de détails
-function openDetailModal(action) {
-    const modal = document.getElementById('detailmodal');
-    if (!modal) {
-        console.error('Modal non trouvé');
-        return;
-    }
-
-    // Mettre à jour le contenu du modal
-    const modalContent = modal.querySelector('.bg-white');
-    if (modalContent) {
-        modalContent.innerHTML = `
-            <button onclick="closeDetailModal()" 
-                class="absolute top-2 right-3 text-gray-600 hover:text-red-500 text-xl font-bold">
-                &times;
-            </button>
-            <h2 class="text-lg font-semibold mb-4">Détails de l'action</h2>
-            <div class="text-sm text-gray-800 space-y-2">
-                <div><span class="font-semibold">Agent:</span> ${escapeHtml(action.nom_prenom || '')}</div>
-                <div><span class="font-semibold">Rôle:</span> ${escapeHtml(action.responsable || '')}</div>
-                <div><span class="font-semibold">Action:</span> ${escapeHtml(action.action || '')}</div>
-                <div><span class="font-semibold">Date:</span> ${escapeHtml(formatDate(action.date_action))}</div>
-                <div class="mt-4">
-                    <span class="font-semibold">Détails:</span>
-                    <div class="mt-2 p-3 bg-gray-50 rounded-lg">
-                        ${formatActionDetails(action.details)}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Afficher le modal
-    modal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-}
-
-// Fonction pour fermer le modal
-function closeDetailModal() {
-    const modal = document.getElementById('detailmodal');
-    if (modal) {
-        modal.classList.add('hidden');
-        document.body.style.overflow = 'auto';
-    }
-}
-
-// Fonction pour formater les détails de l'action
-function formatActionDetails(details) {
-    if (!details || details.trim() === '') {
-        return '<div class="text-gray-500 italic">Aucun détail disponible</div>';
-    }
-
-    try {
-        const donnees = JSON.parse(details);
-        if (typeof donnees === 'object' && donnees !== null) {
-            let html = '';
-            for (const [champ, valeur] of Object.entries(donnees)) {
-                const champFormate = champ.charAt(0).toUpperCase() + champ.slice(1).replace(/_/g, ' ');
-                html += `<div><span class="font-semibold">${escapeHtml(champFormate)}:</span> ${escapeHtml(String(valeur))}</div>`;
-            }
-            return html || '<div class="text-gray-500 italic">Aucun détail disponible</div>';
-        }
-    } catch (error) {
-        console.log('Détails non JSON, affichage brut');
-    }
-
-    return `<div>${escapeHtml(String(details))}</div>`;
-}
-
-// Fonction pour obtenir les initiales
-function getInitials(nomPrenom) {
-    if (!nomPrenom || nomPrenom.trim() === '') return 'NN';
-    const parts = nomPrenom.trim().split(' ');
-    if (parts.length >= 2) {
-        return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-    }
-    return nomPrenom.charAt(0).toUpperCase();
-}
-
-// Fonction pour échapper le HTML
-function escapeHtml(text) {
-    if (text === null || text === undefined) return '';
-    const div = document.createElement('div');
-    div.textContent = String(text);
-    return div.innerHTML;
-}
-
-// Fonction pour formater la date
-function formatDate(dateString) {
-    if (!dateString) return '';
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('fr-FR', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    } catch (error) {
-        return dateString;
-    }
-}
-
-// Fonction pour réinitialiser les filtres
-function resetFilters() {
-    currentFilters = {
-        search: '',
-        actions: '',
-        roles: ''
+      if (action) {
+        console.log("Ouverture du modal pour action:", actionId);
+        openDetailModal(action);
+      } else {
+        console.error("Action non trouvée:", actionId);
+      }
     };
-
-    // Réinitialiser les champs du formulaire
-    const searchInput = document.getElementById('search');
-    const filterActions = document.getElementById('filter_actions');
-    const filterRoles = document.getElementById('filter_roles');
-
-    if (searchInput) searchInput.value = '';
-    if (filterActions) filterActions.value = '';
-    if (filterRoles) filterRoles.value = '';
-
-    // Réappliquer les filtres
-    applyFilters();
+  });
 }
 
-// Exposer les fonctions globalement
+function openDetailModal(action) {
+  const modal = document.getElementById("detailmodal");
+  const modalContent = modal.querySelector(".modal-content");
+  const modalContentInner = modal.querySelector("#modalContent");
+
+  if (!modal || !modalContent || !modalContentInner) {
+    console.error("Erreur: Éléments du modal non trouvés", {
+      modal,
+      modalContent,
+      modalContentInner,
+    });
+    return;
+  }
+
+  modalContentInner.innerHTML = `
+        <div><span class="font-semibold">Effectuée par:</span> ${escapeHtml(
+          action.nom_prenom || ""
+        )}</div>
+        <div><span class="font-semibold">Rôle:</span> ${escapeHtml(
+          action.responsable || ""
+        )}</div>
+        <div><span class="font-semibold">Action:</span> ${escapeHtml(
+          action.action || ""
+        )}</div>
+        <div><span class="font-semibold">Date:</span> ${escapeHtml(
+          formatDate(action.date_action)
+        )}</div>
+        <div class="action-details-section">
+            <span class="font-semibold">Détails:</span>
+            <div class="mt-2">
+                ${formatActionDetails(action)}
+            </div>
+        </div>
+    `;
+
+  console.log("Affichage du modal");
+  modal.classList.remove("hidden");
+  setTimeout(() => {
+    modalContent.classList.add("show");
+    console.log("Classe show ajoutée au modal-content");
+  }, 10);
+  document.body.style.overflow = "hidden";
+}
+
+function closeDetailModal() {
+  const modal = document.getElementById("detailmodal");
+  const modalContent = modal.querySelector(".modal-content");
+  if (modal && modalContent) {
+    console.log("Fermeture du modal");
+    modalContent.classList.remove("show");
+    setTimeout(() => {
+      modal.classList.add("hidden");
+      document.body.style.overflow = "auto";
+      console.log("Modal fermé et overflow rétabli");
+    }, 300);
+  } else {
+    console.error("Erreur: Éléments du modal non trouvés pour la fermeture", {
+      modal,
+      modalContent,
+    });
+  }
+}
+
+function formatActionDetails(action) {
+  if (!action.details || action.details.trim() === "") {
+    return '<div class="text-gray-500 italic">Aucun détail disponible</div>';
+  }
+
+  try {
+    const donnees = JSON.parse(action.details);
+    if (typeof donnees === "object" && donnees !== null) {
+      let html = "";
+      // Utiliser directement donnees.bureau pour le libellé du bureau
+      const bureauLabel = escapeHtml(donnees.bureau || "N/A");
+
+      if (action.action === "modifier" && donnees.changes) {
+        html += `<div><span class="font-semibold">Agent modifié:</span> ${escapeHtml(
+          donnees.prenom || ""
+        )} ${escapeHtml(donnees.nom || "")}</div>`;
+        html += `<div><span class="font-semibold">Bureau:</span> ${bureauLabel}</div>`;
+        if (Object.keys(donnees.changes).length > 0) {
+          html += `<table class="changes-table">`;
+          html += `<thead><tr><th>Champ</th><th>Ancienne valeur</th><th>Nouvelle valeur</th></tr></thead>`;
+          html += `<tbody>`;
+          for (const [champ, valeurs] of Object.entries(donnees.changes)) {
+            let champFormate =
+              champ.charAt(0).toUpperCase() + champ.slice(1).replace(/_/g, " ");
+            let oldValue = valeurs.old ?? "N/A";
+            let newValue = valeurs.new ?? "N/A";
+            // Gérer le champ bureau spécifiquement
+            if (champ === "bureau") {
+              champFormate = "Bureau";
+              oldValue = escapeHtml(oldValue);
+              newValue = escapeHtml(newValue);
+            }
+            html += `
+                            <tr>
+                                <td>${escapeHtml(champFormate)}</td>
+                                <td class="old-value">${escapeHtml(
+                                  String(oldValue)
+                                )}</td>
+                                <td class="new-value">${escapeHtml(
+                                  String(newValue)
+                                )}</td>
+                            </tr>`;
+          }
+          html += `</tbody></table>`;
+        } else {
+          html += `<div class="text-gray-500 italic">Aucune modification de champs</div>`;
+        }
+      } else {
+        // Pour ajout et suppression
+        html += `<div><span class="font-semibold">Agent:</span> ${escapeHtml(
+          donnees.prenom || ""
+        )} ${escapeHtml(donnees.nom || "")}</div>`;
+        html += `<div><span class="font-semibold">Bureau:</span> ${bureauLabel}</div>`;
+        for (const [champ, valeur] of Object.entries(donnees)) {
+          if (
+            champ !== "nom" &&
+            champ !== "prenom" &&
+            champ !== "bureau" &&
+            champ !== "changes"
+          ) {
+            const champFormate =
+              champ.charAt(0).toUpperCase() + champ.slice(1).replace(/_/g, " ");
+            html += `<div><span class="font-semibold">${escapeHtml(
+              champFormate
+            )}:</span> ${escapeHtml(String(valeur))}</div>`;
+          }
+        }
+      }
+      return (
+        html ||
+        '<div class="text-gray-500 italic">Aucun détail disponible</div>'
+      );
+    }
+  } catch (error) {
+    console.log("Détails non JSON, affichage brut:", error);
+  }
+
+  return `<div>${escapeHtml(String(action.details))}</div>`;
+}
+
+function getInitials(nomPrenom) {
+  if (!nomPrenom || nomPrenom.trim() === "") return "NN";
+  const parts = nomPrenom.trim().split(" ");
+  if (parts.length >= 2) {
+    return (
+      parts[0].charAt(0) + parts[parts.length - 1].charAt(0)
+    ).toUpperCase();
+  }
+  return nomPrenom.charAt(0).toUpperCase();
+}
+
+function escapeHtml(text) {
+  if (text === null || text === undefined) return "";
+  const div = document.createElement("div");
+  div.textContent = String(text);
+  return div.innerHTML;
+}
+
+function formatDate(dateString) {
+  if (!dateString) return "";
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("fr-FR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch (error) {
+    return dateString;
+  }
+}
+
+function resetFilters() {
+  currentFilters = {
+    search: "",
+    actions: "",
+    roles: "",
+  };
+
+  const searchInput = document.getElementById("search");
+  const filterActions = document.getElementById("filter_actions");
+  const filterRoles = document.getElementById("filter_roles");
+
+  if (searchInput) searchInput.value = "";
+  if (filterActions) filterActions.value = "";
+  if (filterRoles) filterRoles.value = "";
+
+  applyFilters();
+}
+
 window.closeDetailModal = closeDetailModal;
 window.resetFilters = resetFilters;
 
-// Initialiser quand le DOM est chargé
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initHistoriqueActions);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initHistoriqueActions);
 } else {
-    initHistoriqueActions();
+  initHistoriqueActions();
 }
