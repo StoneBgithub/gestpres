@@ -7,6 +7,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Récupérer le paramètre de recherche
 $search = $_GET['search'] ?? '';
+$filter_actions = $_GET['actions'] ?? '';
+$filter_roles = $_GET['roles'] ?? '';
 
 // Vérifier si l'utilisateur est connecté
 $agent_conn = $_SESSION['user_id'] ?? null;
@@ -25,13 +27,77 @@ try {
     $messages['errors'][] = "Erreur lors de la mise à jour des notifications.";
 }
 
-// Récupérer les paramètres de recherche et filtres
-$search = $_GET['search'] ?? '';
-$filter_actions = $_GET['actions'] ?? '';
-$filter_roles = $_GET['roles'] ?? '';
+$format = isset($_GET['format']) && $_GET['format'] === 'json' ? 'json' : 'html';
+
+if ($format === 'json') {
+    try {
+        $query = "
+            SELECT 
+                j.id as id,
+                j.date_action as date_action,
+                r.libelle as responsable,
+                a.nom as nom,
+                a.prenom as prenom,
+                a.photo as photo,
+                CONCAT(a.prenom, ' ', a.nom) as nom_prenom,
+                j.action_type as action,
+                j.donnees as details
+            FROM journal_actions j
+            JOIN login l on j.ag_id=l.id
+            JOIN agent a ON l.agent_id=a.id
+            JOIN role r ON l.role_id=r.id
+            WHERE 1=1
+        ";
+        $params = [];
+        if ($search) {
+            $query .= " AND (CONCAT(a.prenom, ' ', a.nom) LIKE :search)";
+            $params['search'] = "%$search%";
+        }
+        if ($filter_actions) {
+            $query .= " AND j.action_type = :action_type";
+            $params['action_type'] = $filter_actions;
+        }
+        if ($filter_roles) {
+            $query .= " AND r.libelle = :role";
+            $params['role'] = $filter_roles;
+        }
+        $query .= " ORDER BY j.date_action DESC";
+
+        $stmt = $pdo->prepare($query);
+        $stmt->execute($params);
+        $action = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $sql21 = "SELECT libelle FROM role";
+        $stmt21 = $pdo->query($sql21);
+        $role = $stmt21->fetchAll(PDO::FETCH_ASSOC);
+
+        $sql22 = "SELECT DISTINCT action_type FROM journal_actions";
+        $stmt22 = $pdo->query($sql22);
+        $action_type = $stmt22->fetchAll(PDO::FETCH_ASSOC);
+
+        $sql = "SELECT a.id, CONCAT(a.prenom, ' ', a.nom) AS nom_prenom FROM agent";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute();
+        $ag = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        header('Content-Type: application/json');
+        echo json_encode([
+            'actions' => $action,
+            'roles' => $role,
+            'actionTypes' => $action_type,
+            'agents' => $ag
+        ], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE);
+        exit;
+    } catch (PDOException $e) {
+        error_log("Erreur dans historique_content.php : " . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['error' => 'Erreur serveur: ' . htmlspecialchars($e->getMessage())]);
+        exit;
+    }
+}
 
 try {
-   $query = "
+    $query = "
         SELECT 
             j.id as id,
             j.date_action as date_action,
@@ -39,7 +105,7 @@ try {
             a.nom as nom,
             a.prenom as prenom,
             a.photo as photo,
-            concat(a.nom, ' ' , a.prenom) as nom_prenom,
+            CONCAT(a.prenom, ' ', a.nom) as nom_prenom,
             j.action_type as action,
             j.donnees as details
         FROM journal_actions j
@@ -50,7 +116,7 @@ try {
     ";
     $params = [];
     if ($search) {
-        $query .= " AND (a.nom LIKE :search OR a.prenom LIKE :search OR concat(a.nom, ' ', a.prenom) LIKE :search)";
+        $query .= " AND (CONCAT(a.prenom, ' ', a.nom) LIKE :search)";
         $params['search'] = "%$search%";
     }
     if ($filter_actions) {
@@ -65,7 +131,6 @@ try {
 
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);
-    
     $action = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log("Erreur dans historique_content.php : " . $e->getMessage());
@@ -73,7 +138,7 @@ try {
 }
 
 try {
-    $sql21 = "SELECT libelle FROM role ";
+    $sql21 = "SELECT libelle FROM role";
     $stmt21 = $pdo->query($sql21);
     $role = $stmt21->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -82,7 +147,7 @@ try {
 }
 
 try {
-    $sql22 = "SELECT DISTINCT action_type FROM journal_actions ";
+    $sql22 = "SELECT DISTINCT action_type FROM journal_actions";
     $stmt22 = $pdo->query($sql22);
     $action_type = $stmt22->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -90,9 +155,12 @@ try {
     $messages['errors'][] = "Erreur lors de la récupération des types d'actions.";
 }
 
-$sql = "SELECT a.id, a.nom, a.prenom, CONCAT(a.prenom, ' ', a.nom) AS nom_prenom, a.matricule, a.email, a.telephone, a.photo, a.bureau_id, b.libele AS libele_bureau, s.libele AS libele_service FROM agent a JOIN bureau b ON a.bureau_id = b.id JOIN service s ON b.service_id = s.id WHERE a.telephone LIKE :search OR CONCAT(a.prenom, ' ', a.nom) LIKE :search";
-
 try {
+    $sql = "SELECT a.id, CONCAT(a.prenom, ' ', a.nom) AS nom_prenom, a.matricule, a.email, a.telephone, a.photo, a.bureau_id, b.libele AS libele_bureau, s.libele AS libele_service 
+            FROM agent a 
+            JOIN bureau b ON a.bureau_id = b.id 
+            JOIN service s ON b.service_id = s.id 
+            WHERE a.telephone LIKE :search OR CONCAT(a.prenom, ' ', a.nom) LIKE :search";
     $stmt = $pdo->prepare($sql);
     $stmt->execute(['search' => "%$search%"]);
     $ag = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -105,22 +173,18 @@ try {
 try {
     $stmt = $pdo->prepare("UPDATE journal_actions SET est_vue = 1 WHERE est_vue = 0");
     $stmt->execute();
-    // Déclencher l'événement pour mettre à jour le badge de notifications
     echo "<script>document.dispatchEvent(new CustomEvent('notifications:updated'));</script>";
 } catch (PDOException $e) {
     error_log("Erreur dans historique_content.php (mise à jour est_vue) : " . $e->getMessage());
     $messages['errors'][] = "Erreur lors de la mise à jour des notifications.";
 }
-?>
 
-<?php
 // Stocker les données dans un élément invisible pour le JS
 echo '<script id="actionData" type="application/json">' . json_encode($action, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
 echo '<script id="roleData" type="application/json">' . json_encode($role, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
 echo '<script id="agentData" type="application/json">' . json_encode($ag, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
 echo '<script id="actiontypeData" type="application/json">' . json_encode($action_type, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
 ?>
-
 
 <!-- Affichage des erreurs -->
 <?php if (!empty($messages['errors'])): ?>
@@ -146,14 +210,10 @@ echo '<script id="actiontypeData" type="application/json">' . json_encode($actio
 
 #modalContent {
     max-height: 60vh;
-    /* Limite la hauteur du contenu à 60% de la hauteur de la fenêtre */
     overflow-y: auto;
-    /* Active le défilement vertical si nécessaire */
     padding-right: 0.5rem;
-    /* Marge pour éviter que le contenu touche le bord */
 }
 
-/* Personnalisation de la barre de défilement */
 #modalContent::-webkit-scrollbar {
     width: 8px;
 }
@@ -180,9 +240,7 @@ echo '<script id="actiontypeData" type="application/json">' . json_encode($actio
     border: 1px solid #e5e7eb;
     border-radius: 0.5rem;
     overflow-x: auto;
-    /* Active le défilement horizontal si nécessaire */
     display: block;
-    /* Permet le défilement horizontal */
 }
 
 .changes-table th,
@@ -190,11 +248,8 @@ echo '<script id="actiontypeData" type="application/json">' . json_encode($actio
     padding: 0.75rem;
     text-align: left;
     min-width: 120px;
-    /* Assure une largeur minimale pour les colonnes */
     white-space: normal;
-    /* Permet le retour à la ligne */
     word-break: break-word;
-    /* Casse les mots longs pour éviter le débordement */
 }
 
 .changes-table th {
@@ -207,11 +262,8 @@ echo '<script id="actiontypeData" type="application/json">' . json_encode($actio
 .changes-table td {
     border-bottom: 1px solid #e5e7eb;
     max-width: 200px;
-    /* Limite la largeur des cellules pour éviter l'étirement */
     overflow: hidden;
-    /* Cache le contenu qui dépasse */
     text-overflow: ellipsis;
-    /* Ajoute des points de suspension pour le contenu tronqué */
 }
 
 .changes-table tr:last-child td {
@@ -402,3 +454,5 @@ echo '<script id="actiontypeData" type="application/json">' . json_encode($actio
         </div>
     </div>
 </div>
+
+<script src="js/historique.js"></script>
