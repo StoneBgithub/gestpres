@@ -38,6 +38,40 @@ export function initNavigation() {
 
   // Informer les autres modules que la navigation est prête
   eventBus.publish("navigation:ready", { currentPage });
+
+  // Gérer la mise à jour des notifications
+  window.addEventListener("notifications:updated", () => {
+    updateNotificationBadge();
+  });
+}
+
+// Fonction pour mettre à jour le badge de notification
+function updateNotificationBadge() {
+  const badgeContainer = document.getElementById("notification-container");
+  if (!badgeContainer) return;
+
+  fetch("get_notifications.php")
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.error) {
+        console.error("Erreur lors de la récupération des notifications:", data.error);
+        return;
+      }
+      const badge = document.getElementById("notification-badge");
+      if (badge) badge.remove();
+      if (data.nbnouvelles > 0) {
+        const newBadge = document.createElement("span");
+        newBadge.id = "notification-badge";
+        newBadge.className = "badge-rond";
+        newBadge.setAttribute("aria-label", `Nouvelles actions non vues : ${data.nbnouvelles}`);
+        newBadge.setAttribute("aria-live", "polite");
+        newBadge.textContent = data.nbnouvelles;
+        badgeContainer.appendChild(newBadge);
+      }
+    })
+    .catch((error) => {
+      console.error("Erreur lors de la mise à jour du badge:", error);
+    });
 }
 
 // Fonction pour charger le contenu via AJAX
@@ -74,33 +108,25 @@ function updatePageTitle(page) {
 }
 
 // Fonction pour mettre à jour l'état actif du menu
-// Fonction pour mettre à jour l'état actif du menu
 function updateActiveMenu(currentPage) {
   const menuLinks = document.querySelectorAll(".sidebar-menu");
 
   menuLinks.forEach((link) => {
-    // Supprimer toutes les classes d'état actif
     link.classList.remove(
       "active-menu",
       "gradient-bg",
       "text-white",
       "font-bold"
     );
-
-    // Ajouter la classe text-congo-black par défaut
     link.classList.add("text-congo-black");
   });
 
-  // Trouver le lien actif
   const activeLink = document.querySelector(
     `.sidebar-menu[data-page="${currentPage}"]`
   );
 
   if (activeLink) {
-    // Supprimer la classe text-congo-black
     activeLink.classList.remove("text-congo-black");
-
-    // Ajouter toutes les classes d'état actif
     activeLink.classList.add(
       "active-menu",
       "gradient-bg",

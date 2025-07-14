@@ -16,8 +16,22 @@ if (!$agent_conn) {
     exit();
 }
 
+// Mettre à jour est_vue à 1 pour toutes les actions non vues
 try {
-    $stmt = $pdo->query("
+    $stmt_update = $pdo->prepare("UPDATE journal_actions SET est_vue = 1 WHERE est_vue = 0");
+    $stmt_update->execute();
+} catch (PDOException $e) {
+    error_log("Erreur lors de la mise à jour de est_vue dans historique_content.php : " . $e->getMessage());
+    $messages['errors'][] = "Erreur lors de la mise à jour des notifications.";
+}
+
+// Récupérer les paramètres de recherche et filtres
+$search = $_GET['search'] ?? '';
+$filter_actions = $_GET['actions'] ?? '';
+$filter_roles = $_GET['roles'] ?? '';
+
+try {
+   $query = "
         SELECT 
             j.id as id,
             j.date_action as date_action,
@@ -25,15 +39,32 @@ try {
             a.nom as nom,
             a.prenom as prenom,
             a.photo as photo,
-            concat(a.nom, ' ', a.prenom) as nom_prenom,
+            concat(a.nom, ' ' , a.prenom) as nom_prenom,
             j.action_type as action,
             j.donnees as details
         FROM journal_actions j
         JOIN login l on j.ag_id=l.id
         JOIN agent a ON l.agent_id=a.id
         JOIN role r ON l.role_id=r.id
-        ORDER BY j.date_action DESC;
-    ");
+        WHERE 1=1
+    ";
+    $params = [];
+    if ($search) {
+        $query .= " AND (a.nom LIKE :search OR a.prenom LIKE :search OR concat(a.nom, ' ', a.prenom) LIKE :search)";
+        $params['search'] = "%$search%";
+    }
+    if ($filter_actions) {
+        $query .= " AND j.action_type = :action_type";
+        $params['action_type'] = $filter_actions;
+    }
+    if ($filter_roles) {
+        $query .= " AND r.libelle = :role";
+        $params['role'] = $filter_roles;
+    }
+    $query .= " ORDER BY j.date_action DESC";
+
+    $stmt = $pdo->prepare($query);
+    $stmt->execute($params);
     
     $action = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
@@ -89,6 +120,17 @@ echo '<script id="roleData" type="application/json">' . json_encode($role, JSON_
 echo '<script id="agentData" type="application/json">' . json_encode($ag, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
 echo '<script id="actiontypeData" type="application/json">' . json_encode($action_type, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
 ?>
+
+
+<!-- Affichage des erreurs -->
+<?php if (!empty($messages['errors'])): ?>
+<div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded" role="alert">
+    <p class="font-bold">Erreur</p>
+    <?php foreach ($messages['errors'] as $error): ?>
+    <p><?php echo htmlspecialchars($error); ?></p>
+    <?php endforeach; ?>
+</div>
+<?php endif; ?>
 
 <style>
 .modal-content {
