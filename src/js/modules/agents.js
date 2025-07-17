@@ -27,7 +27,19 @@ export function init() {
   setupFilters();
   checkAndShowMessageModal();
 }
-function drawResponsiveText(ctx, text, maxWidth, initialFontSize, x, y, fontFamily = "Arial", color = "#f2f0e9", bold = false) {
+
+// Fonction pour dessiner du texte responsive
+function drawResponsiveText(
+  ctx,
+  text,
+  maxWidth,
+  initialFontSize,
+  x,
+  y,
+  fontFamily = "Arial",
+  color = "#f2f0e9",
+  bold = false
+) {
   let fontSize = initialFontSize;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
@@ -44,7 +56,7 @@ function drawResponsiveText(ctx, text, maxWidth, initialFontSize, x, y, fontFami
   ctx.fillText(text, x, y);
 }
 
-// Charger les données des agents depuis l’élément script
+// Charger les données des agents
 function loadAgentsData() {
   const agentsDataElement = document.getElementById("agentsData");
   if (agentsDataElement) {
@@ -92,11 +104,17 @@ function checkAndShowMessageModal() {
         (messages.success && messages.success.length > 0) ||
         (messages.errors && messages.errors.length > 0)
       ) {
+        // Ajouter un log pour débogage
+        console.log("Messages détectés:", messages);
         showModal("messageModal");
+      } else {
+        console.log("Aucun message à afficher dans messageModal");
       }
     } catch (e) {
       console.error("Erreur lors du parsing de data-messages:", e);
     }
+  } else {
+    console.warn("messageModal ou data-messages non trouvé");
   }
 }
 
@@ -122,10 +140,21 @@ function initModals() {
         }
       });
     });
+
+  // Fermeture des modals avec la touche Échap
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      closeModal("agentModal");
+      closeModal("deleteModal");
+      closeModal("qrModal");
+      closeModal("messageModal");
+    }
+  });
 }
 
 // Configurer les écouteurs d’événements
 function setupListeners() {
+  // Gestion des clics sur le body
   document.body.addEventListener("click", function (e) {
     const target = e.target;
 
@@ -172,7 +201,9 @@ function setupListeners() {
   const downloadQRBtn = document.getElementById("downloadQRBtn");
   if (downloadQRBtn) {
     downloadQRBtn.addEventListener("click", function () {
-      const canvas = document.getElementById("qrCodeContainer").querySelector("canvas");
+      const canvas = document
+        .getElementById("qrCodeContainer")
+        .querySelector("canvas");
       if (canvas) {
         const qrAgentName = document.getElementById("qrAgentName").textContent;
         const link = document.createElement("a");
@@ -181,6 +212,68 @@ function setupListeners() {
         link.click();
       } else {
         alert("Le badge n'a pas été généré correctement.");
+      }
+    });
+  }
+
+  // Validation du formulaire avant soumission
+  const agentForm = document.getElementById("agentForm");
+  if (agentForm) {
+    agentForm.addEventListener("submit", function (e) {
+      const action = document.getElementById("action").value;
+      if (action === "update") {
+        const agentId = document.getElementById("agent_id").value;
+        const agentIdStr = String(agentId);
+        const agent = agents.find((a) => a.id === agentIdStr);
+        if (agent) {
+          const fields = {
+            nom: document.getElementById("nom").value || "",
+            prenoms: document.getElementById("prenoms").value || "",
+            email: document.getElementById("email").value || "",
+            telephone: document.getElementById("telephone").value || "",
+            bureau_id: document.getElementById("bureau_id").value || "",
+            // Note : La photo n'est pas vérifiée ici car elle est gérée côté serveur
+          };
+
+          const hasChanges = Object.keys(fields).some((key) => {
+            const currentValue = String(agent[key] || "");
+            return fields[key] !== currentValue;
+          });
+
+          if (!hasChanges && !document.getElementById("photo").files.length) {
+            e.preventDefault();
+            // Afficher un message local sans soumettre
+            const messageModal = document.getElementById("messageModal");
+            const messageModalContent = document.getElementById(
+              "messageModalContent"
+            );
+            if (messageModal && messageModalContent) {
+              messageModal.dataset.messages = JSON.stringify({
+                success: ["Aucune donnée modifiée."],
+                errors: [],
+              });
+              const title = messageModalContent.querySelector("h3 span");
+              const icon = messageModalContent.querySelector("h3 i");
+              if (title && icon) {
+                title.textContent = "Information";
+                icon.className = "fas fa-info-circle mr-2 text-blue-500";
+              }
+              const messageContainer =
+                messageModalContent.querySelector(".p-4.sm\\:p-6");
+              if (messageContainer) {
+                messageContainer.innerHTML = `
+                  <p class="text-blue-600 font-semibold text-sm sm:text-base mb-2">ℹ️ Aucune donnée modifiée.</p>
+                  <div class="flex justify-end mt-4">
+                    <button type="button" class="close-modal px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all flex items-center">
+                      <i class="fas fa-times mr-2"></i> Fermer
+                    </button>
+                  </div>
+                `;
+              }
+              showModal("messageModal");
+            }
+          }
+        }
       }
     });
   }
@@ -257,8 +350,12 @@ export function generateQR(agentId) {
   }
 
   // Mettre à jour les informations de l'agent dans la modale
-  document.getElementById("qrAgentName").textContent = `${agent.prenom} ${agent.nom}`;
-  document.getElementById("qrAgentInfo").textContent = `${agent.libele_service} - ${agent.libele_bureau}`;
+  document.getElementById(
+    "qrAgentName"
+  ).textContent = `${agent.prenom} ${agent.nom}`;
+  document.getElementById(
+    "qrAgentInfo"
+  ).textContent = `${agent.libele_service} - ${agent.libele_bureau}`;
 
   // Créer un canvas pour le badge
   const canvas = document.createElement("canvas");
@@ -283,7 +380,13 @@ export function generateQR(agentId) {
         ctx.beginPath();
         ctx.ellipse(437.03, 618.28, 266.14 / 2, 279.22 / 2, 0, 0, 2 * Math.PI); // Ellipse pour la photo
         ctx.clip();
-        ctx.drawImage(photoImg, 437.03 - 266.14 / 2, 618.28 - 279.22 / 2, 266.14, 279.22);
+        ctx.drawImage(
+          photoImg,
+          437.03 - 266.14 / 2,
+          618.28 - 279.22 / 2,
+          266.14,
+          279.22
+        );
         ctx.restore();
         drawTextAndQR();
       };
@@ -300,14 +403,13 @@ export function generateQR(agentId) {
       // Dessiner le nom de l'agent
       ctx.font = "bold 50pt Arial"; // Taille de police pour le nom
       ctx.fillStyle = "#004225"; // Couleur du texte
-      ctx.textAlign = "center"; // Alignement à gauche pour correspondre à la position X
-      ctx.textBaseline = "top";               // Alignement vertical (optionnel mais recommandé)
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
       ctx.fillText(`${agent.prenom} ${agent.nom}`, 430.49, 778.77);
 
       // Dessiner le libellé du bureau de manière responsive
       const bureauText = agent.libele_bureau || "Non défini";
       drawResponsiveText(ctx, bureauText, 500, 25, 433.38, 860.5); // maxWidth 500px, initialFontSize 25pt
-
 
       // Générer le QR code
       const qrContainer = document.createElement("div");
@@ -344,7 +446,9 @@ export function generateQR(agentId) {
   };
 
   templateImg.onerror = function () {
-    console.error("Erreur lors du chargement du template de badge (images/1.png).");
+    console.error(
+      "Erreur lors du chargement du template de badge (images/1.png)."
+    );
     alert("Impossible de charger le modèle de badge.");
   };
 }
@@ -383,6 +487,7 @@ export function showModal(modalId) {
       modalContent.classList.add("scale-100", "opacity-100");
     }, 10);
   }
+  document.body.style.overflow = "hidden";
 }
 
 // Fermer un modal
@@ -394,9 +499,13 @@ export function closeModal(modalId) {
   if (modalContent) {
     modalContent.classList.remove("scale-100", "opacity-100");
     modalContent.classList.add("scale-95", "opacity-0");
-    setTimeout(() => modal.classList.add("hidden"), 300);
+    setTimeout(() => {
+      modal.classList.add("hidden");
+      document.body.style.overflow = "auto";
+    }, 300);
   } else {
     modal.classList.add("hidden");
+    document.body.style.overflow = "auto";
   }
 
   eventBus.publish("modal:closed", { modalId });
