@@ -1,6 +1,6 @@
 import { eventBus } from "../config.js";
 
-// Liste des comptes utilisateurs et données référentielles
+// Liste des comptes, agents, bureaux, rôles et statuts
 let comptes = [];
 let agents = [];
 let bureaux = [];
@@ -23,7 +23,7 @@ function getInitialsCircle(name) {
 
 // Fonction d'initialisation principale
 export function init() {
-  console.log("Initialisation du module de gestion des utilisateurs");
+  console.log("Initialisation du module de gestion des comptes");
   loadComptesData();
   loadAgentsData();
   loadBureauxData();
@@ -34,24 +34,26 @@ export function init() {
   setupFilters();
   checkAndShowMessageModal();
   setupPasswordToggle();
-  setupFormSubmission(); 
-  createAjaxEndpoint();
-  setupFormSubmissionClassic();
 }
 
-// Charger les données des comptes depuis l'élément script
+// Charger les données des comptes
 function loadComptesData() {
   const comptesDataElement = document.getElementById("comptesData");
   if (comptesDataElement) {
     try {
-      comptes = JSON.parse(comptesDataElement.textContent).map((compte, index) => {
-        if (!compte.id) {
-          compte.id = compte.user_id || compte._id || null;
-          console.warn(`Compte à l'index ${index} n'a pas d'ID défini`, compte);
+      comptes = JSON.parse(comptesDataElement.textContent).map(
+        (compte, index) => {
+          if (!compte.id) {
+            compte.id = compte.login_id || compte._id || `temp-id-${index}`;
+            console.warn(
+              `Compte à l'index ${index} n'a pas d'ID défini`,
+              compte
+            );
+          }
+          compte.id = String(compte.id);
+          return compte;
         }
-        compte.id = String(compte.id);
-        return compte;
-      });
+      );
       console.log(`${comptes.length} comptes chargés`);
     } catch (e) {
       console.error("Erreur lors du parsing des données comptes:", e);
@@ -93,10 +95,10 @@ function loadBureauxData() {
 
 // Charger les données des rôles
 function loadRolesData() {
-  const roleDataElement = document.getElementById("roleData");
-  if (roleDataElement) {
+  const rolesDataElement = document.getElementById("roleData");
+  if (rolesDataElement) {
     try {
-      roles = JSON.parse(roleDataElement.textContent);
+      roles = JSON.parse(rolesDataElement.textContent);
       console.log(`${roles.length} rôles chargés`);
     } catch (e) {
       console.error("Erreur lors du parsing des données rôles:", e);
@@ -107,10 +109,10 @@ function loadRolesData() {
 
 // Charger les données des statuts
 function loadStatutsData() {
-  const statutDataElement = document.getElementById("statutData");
-  if (statutDataElement) {
+  const statutsDataElement = document.getElementById("statutData");
+  if (statutsDataElement) {
     try {
-      statuts = JSON.parse(statutDataElement.textContent);
+      statuts = JSON.parse(statutsDataElement.textContent);
       console.log(`${statuts.length} statuts chargés`);
     } catch (e) {
       console.error("Erreur lors du parsing des données statuts:", e);
@@ -129,6 +131,7 @@ function checkAndShowMessageModal() {
         (messages.success && messages.success.length > 0) ||
         (messages.errors && messages.errors.length > 0)
       ) {
+        console.log("Messages détectés:", messages);
         showModal("messageModal");
       }
     } catch (e) {
@@ -141,9 +144,7 @@ function checkAndShowMessageModal() {
 function initModals() {
   document.querySelectorAll(".close-modal, .close-modals").forEach((btn) => {
     btn.addEventListener("click", function () {
-      const modal = this.closest(
-        "#compteModal, #deleteModal, #messageModal"
-      );
+      const modal = this.closest("#compteModal, #deleteModal, #messageModal");
       if (modal) {
         closeModal(modal.id);
       }
@@ -159,6 +160,15 @@ function initModals() {
         }
       });
     });
+
+  // Fermeture des modals avec la touche Échap
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      closeModal("compteModal");
+      closeModal("deleteModal");
+      closeModal("messageModal");
+    }
+  });
 }
 
 // Configurer les écouteurs d'événements
@@ -166,7 +176,7 @@ function setupListeners() {
   document.body.addEventListener("click", function (e) {
     const target = e.target;
 
-    // Bouton "Ajouter un utilisateur"
+    // Bouton "Ajouter un compte"
     if (target.matches(".add-compte-btn")) {
       addCompte();
     }
@@ -196,165 +206,296 @@ function setupListeners() {
     }
   });
 
-  // Gestion du changement de bureau pour mettre à jour la liste des agents DANS LE MODAL
+  // Gestion du sélecteur de bureau pour mettre à jour les agents
   const modalBureauSelect = document.getElementById("filter_bureau");
   if (modalBureauSelect) {
     modalBureauSelect.addEventListener("change", function () {
       updateModalAgentsOptions(this.value);
     });
   }
+
+  // Gestion de la sélection d'agent pour mettre à jour agent_idss
+  const agentSelect = document.getElementById("filter_agent");
+  const agentIdInput = document.getElementById("agent_idss");
+  if (agentSelect && agentIdInput) {
+    const newAgentSelect = agentSelect.cloneNode(true);
+    agentSelect.parentNode.replaceChild(newAgentSelect, agentSelect);
+    newAgentSelect.addEventListener("change", function () {
+      agentIdInput.value = this.value;
+      console.log("Agent sélectionné, agent_idss mis à jour:", this.value);
+    });
+  }
+
+  // Soumission du formulaire via AJAX - VERSION CORRIGÉE
+  const compteForm = document.getElementById("compteForm");
+  if (compteForm) {
+    compteForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      console.log("Soumission du formulaire déclenchée");
+
+      const bureauSelect = document.getElementById("filter_bureau");
+      const agentSelect = document.getElementById("filter_agent");
+      const roleSelect = document.getElementById("role");
+      const passwordInput = document.getElementById("mot_de_passe");
+      const agentIdInput = document.getElementById("agent_idss");
+      const action = document.getElementById("formAction").value;
+
+      // Validation côté client
+      let errors = [];
+      if (
+        !agentSelect ||
+        !agentSelect.value ||
+        agentSelect.value === "Aucun agent sans compte"
+      ) {
+        errors.push(
+          "Le champ agent est requis. Veuillez sélectionner un agent valide."
+        );
+      }
+      if (!roleSelect || !roleSelect.value) {
+        errors.push("Le champ rôle est requis.");
+      }
+      if (action === "add" && (!passwordInput || !passwordInput.value)) {
+        errors.push("Le champ mot de passe est requis pour l'ajout.");
+      }
+
+      if (errors.length > 0) {
+        console.log("Erreurs de validation:", errors);
+        showMessageModal("Erreur", errors, "error");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("action", action);
+      formData.append("agent_id", agentSelect.value);
+      formData.append("role_id", roleSelect.value);
+      if (passwordInput && passwordInput.value) {
+        formData.append("mot_de_passe", passwordInput.value);
+      }
+
+      // Debug des données envoyées
+      console.log("Données FormData:", {
+        action: formData.get("action"),
+        agent_id: formData.get("agent_id"),
+        role_id: formData.get("role_id"),
+        mot_de_passe: formData.get("mot_de_passe") ? "***" : null,
+      });
+
+      const submitButton = this.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML =
+          '<i class="fas fa-spinner fa-spin mr-2"></i> Traitement...';
+      }
+
+      // Requête AJAX corrigée
+      fetch(window.location.href, {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin",
+      })
+        .then((response) => {
+          console.log("Statut de réponse:", response.status);
+          console.log("Headers de réponse:", [...response.headers.entries()]);
+
+          if (!response.ok) {
+            throw new Error(`Erreur HTTP ! Statut : ${response.status}`);
+          }
+
+          const contentType = response.headers.get("content-type");
+          console.log("Content-Type:", contentType);
+
+          // Vérifier si c'est du JSON
+          if (contentType && contentType.includes("application/json")) {
+            return response.json();
+          } else {
+            // Si ce n'est pas du JSON, récupérer le texte pour debug
+            return response.text().then((text) => {
+              console.log("Réponse texte brute:", text);
+              // Essayer de parser le JSON manuellement
+              try {
+                return JSON.parse(text);
+              } catch (e) {
+                throw new Error(
+                  "Réponse non JSON reçue: " + text.substring(0, 200)
+                );
+              }
+            });
+          }
+        })
+        .then((data) => {
+          console.log("Réponse serveur parsée:", data);
+
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML =
+              '<i class="fas fa-save mr-2"></i> Enregistrer';
+          }
+
+          closeModal("compteModal");
+
+          if (data.success) {
+            showMessageModal(
+              "Succès",
+              data.messages.success || ["Opération réussie"],
+              "success"
+            );
+            // Recharger la page pour actualiser les données
+            setTimeout(() => {
+              window.location.reload();
+            }, 1500);
+          } else {
+            showMessageModal(
+              "Erreur",
+              data.messages.errors || ["Une erreur est survenue"],
+              "error"
+            );
+          }
+        })
+        .catch((error) => {
+          console.error("Erreur lors de la soumission:", error);
+
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.innerHTML =
+              '<i class="fas fa-save mr-2"></i> Enregistrer';
+          }
+
+          showMessageModal(
+            "Erreur",
+            ["Erreur lors de l'envoi du formulaire : " + error.message],
+            "error"
+          );
+        });
+    });
+  }
 }
 
-// Fonction pour mettre à jour les options des agents selon le bureau sélectionné DANS LE MODAL
+// Mettre à jour les options des agents selon le bureau - VERSION CORRIGÉE
 function updateModalAgentsOptions(bureauLibelle) {
   const agentSelect = document.getElementById("filter_agent");
-  if (!agentSelect) return;
+  const agentIdInput = document.getElementById("agent_idss");
+  if (!agentSelect || !agentIdInput) return;
 
-  // Réinitialiser les options
   agentSelect.innerHTML = '<option value="">Choisir un agent</option>';
-  
+  agentIdInput.value = "";
+
   if (bureauLibelle) {
-    console.log("Bureau sélectionné:", bureauLibelle);
-    console.log("Agents disponibles:", agents);
-    
-    // Filtrer les agents par bureau (en utilisant le libellé du bureau)
-    const agentsDuBureau = agents.filter(agent => agent.bureau === bureauLibelle);
-    console.log("Agents du bureau:", agentsDuBureau);
-    
-    agentsDuBureau.forEach(agent => {
+    const agentsDuBureau = agents.filter(
+      (agent) => agent.bureau === bureauLibelle
+    );
+
+    console.log("Agents du bureau sélectionné:", agentsDuBureau);
+
+    if (agentsDuBureau.length > 0) {
+      agentsDuBureau.forEach((agent) => {
+        const option = document.createElement("option");
+        option.value = agent.id;
+        option.textContent = agent.nom_prenom;
+        agentSelect.appendChild(option);
+      });
+      agentSelect.disabled = false;
+    } else {
       const option = document.createElement("option");
-      option.value = agent.nom_prenom; // Utiliser nom_prenom comme valeur
-      option.textContent = agent.nom_prenom;
+      option.value = "";
+      option.textContent = "Aucun agent sans compte";
       agentSelect.appendChild(option);
-    });
-    
-    // Activer le select des agents
-    agentSelect.disabled = false;
+      agentSelect.disabled = true;
+    }
   } else {
-    // Désactiver le select des agents
     agentSelect.disabled = true;
   }
 }
 
-// Fonction pour ouvrir le modal d'ajout de compte
+// Ouvre le modal d'ajout de compte
 export function addCompte() {
   const modal = document.getElementById("compteModal");
   if (!modal) return;
-  
+
   document.getElementById("modalTitle").innerHTML =
     '<i class="fas fa-user-plus mr-2 text-indigo-600"></i><span>Ajouter un nouvel utilisateur</span>';
-  
+
   const form = document.getElementById("compteForm");
   if (form) {
     form.reset();
     document.getElementById("agent_idss").value = "";
-    document.getElementById("actions").value = "add";
-    
-    // Réinitialiser les selects
+    document.getElementById("formAction").value = "add";
+    document.getElementById("mot_de_passe").value = "";
+    document.getElementById("mot_de_passe").placeholder =
+      "Entrez le mot de passe";
+    document.getElementById("mot_de_passe").required = true;
+
     const agentSelect = document.getElementById("filter_agent");
     const bureauSelect = document.getElementById("filter_bureau");
-    
     if (agentSelect) {
       agentSelect.disabled = true;
       agentSelect.innerHTML = '<option value="">Choisir un agent</option>';
     }
-    
     if (bureauSelect) {
       bureauSelect.value = "";
     }
   }
 
-  // Réinitialiser le champ mot de passe
-  const passwordInput = document.getElementById("mot_de_passe");
-  const eyeIcon = document.getElementById("eyeIcon");
-  if (passwordInput) {
-    passwordInput.type = "password";
-    passwordInput.value = "";
-    passwordInput.placeholder = "Mot de passe";
-  }
-  if (eyeIcon) {
-    eyeIcon.classList.remove("fa-eye-slash");
-    eyeIcon.classList.add("fa-eye");
-  }
-  
-  // Réinitialiser le toggle du mot de passe
   passwordToggleInitialized = false;
   setupPasswordToggle();
-  
   showModal("compteModal");
 }
 
-// Fonction pour ouvrir le modal d'édition
+// Ouvre le modal d'édition
 export function editCompte(compteId) {
   const modal = document.getElementById("compteModal");
   if (!modal) return;
-  
+
   document.getElementById("modalTitle").innerHTML =
     '<i class="fas fa-user-edit mr-2 text-indigo-600"></i><span>Modifier un utilisateur</span>';
 
   const compteIdStr = String(compteId);
   const compte = comptes.find((c) => c.id === compteIdStr);
   if (!compte) {
-    alert("Utilisateur non trouvé.");
+    showMessageModal("Erreur", ["Utilisateur non trouvé."], "error");
     return;
   }
 
   const form = document.getElementById("compteForm");
   if (!form) return;
 
-  // Trouver l'agent associé à ce compte
-  const agent = agents.find(a => a.nom_prenom === compte.nom_prenom);
-  
-  const fields = {
-    agent_idss: compte.id,
-    actions: "update",
-    mot_de_passe: "", // Le mot de passe n'est pas affiché pour la sécurité
-  };
+  // Réinitialiser le formulaire
+  form.reset();
 
-  for (const [id, value] of Object.entries(fields)) {
-    const field = document.getElementById(id);
-    if (field) {
-      field.value = value || "";
+  // Remplir les champs
+  document.getElementById("agent_idss").value = compte.agent_id || "";
+  document.getElementById("formAction").value = "update";
+  document.getElementById("role").value = compte.role_id || "";
+  document.getElementById("mot_de_passe").value = "";
+  document.getElementById("mot_de_passe").placeholder =
+    "Nouveau mot de passe (optionnel)";
+  document.getElementById("mot_de_passe").required = false;
+
+  // Gérer la sélection du bureau et de l'agent
+  const bureauSelect = document.getElementById("filter_bureau");
+  const agentSelect = document.getElementById("filter_agent");
+
+  if (bureauSelect && agentSelect) {
+    const agent = agents.find((a) => a.id === compte.agent_id);
+    if (agent && agent.bureau) {
+      bureauSelect.value = agent.bureau;
+      updateModalAgentsOptions(agent.bureau);
+      setTimeout(() => {
+        agentSelect.value = agent.id;
+        document.getElementById("agent_idss").value = agent.id;
+      }, 100);
+    } else {
+      bureauSelect.value = "";
+      agentSelect.disabled = true;
+      agentSelect.innerHTML = '<option value="">Aucun agent trouvé</option>';
     }
   }
 
-  // Réinitialiser le toggle du mot de passe
-  const passwordInput = document.getElementById("mot_de_passe");
-  const eyeIcon = document.getElementById("eyeIcon");
-  if (passwordInput) {
-    passwordInput.type = "password";
-    passwordInput.placeholder = "Nouveau mot de passe (optionnel)";
-  }
-  if (eyeIcon) {
-    eyeIcon.classList.remove("fa-eye-slash");
-    eyeIcon.classList.add("fa-eye");
-  }
-
-  // Pré-sélectionner le bureau et l'agent
-  const bureauSelect = document.getElementById("filter_bureau");
-  const agentSelect = document.getElementById("filter_agent");
-  
-  if (agent && agent.bureau && bureauSelect) {
-    bureauSelect.value = agent.bureau;
-    // Mettre à jour les agents selon le bureau sélectionné
-    updateModalAgentsOptions(agent.bureau);
-    
-    // Sélectionner l'agent associé après un court délai
-    setTimeout(() => {
-      if (agentSelect) {
-        agentSelect.value = agent.nom_prenom;
-      }
-    }, 100);
-  }
-
-  // Réinitialiser le toggle du mot de passe
   passwordToggleInitialized = false;
   setupPasswordToggle();
-
   showModal("compteModal");
 }
 
-// Fonction pour ouvrir le modal de suppression
+// Ouvre le modal de suppression
 export function confirmDelete(compteId) {
   const modal = document.getElementById("deleteModal");
   if (!modal) return;
@@ -362,193 +503,104 @@ export function confirmDelete(compteId) {
   const compteIdStr = String(compteId);
   const compte = comptes.find((c) => c.id === compteIdStr);
   if (!compte) {
-    alert("Utilisateur non trouvé pour suppression.");
+    showMessageModal(
+      "Erreur",
+      ["Utilisateur non trouvé pour suppression."],
+      "error"
+    );
     return;
   }
 
   const confirmDeleteBtn = document.getElementById("confirmDeleteBtn");
   if (confirmDeleteBtn) {
-    confirmDeleteBtn.href = `?page=compte_content&action=delete&id=${compteId}`;
+    confirmDeleteBtn.onclick = function (e) {
+      e.preventDefault();
+      performDelete(compteId);
+    };
   }
 
   showModal("deleteModal");
-  eventBus.publish("comptes:deleteRequested", { compteId });
 }
 
-// Afficher un modal avec animation
-export function showModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (!modal) return;
+// Exécute la suppression via AJAX - VERSION CORRIGÉE
+function performDelete(compteId) {
+  const formData = new FormData();
+  formData.append("action", "delete");
+  formData.append("id", compteId);
 
-  modal.classList.remove("hidden");
-  const modalContent = document.getElementById(`${modalId}Content`);
-  if (modalContent) {
-    setTimeout(() => {
-      modalContent.classList.remove("scale-95", "opacity-0");
-      modalContent.classList.add("scale-100", "opacity-100");
-    }, 10);
-  }
-}
+  console.log("Suppression du compte ID:", compteId);
 
-// Fermer un modal
-export function closeModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (!modal) return;
+  fetch(window.location.href, {
+    method: "POST",
+    body: formData,
+    credentials: "same-origin",
+  })
+    .then((response) => {
+      console.log("Statut de réponse suppression:", response.status);
 
-  const modalContent = document.getElementById(`${modalId}Content`);
-  if (modalContent) {
-    modalContent.classList.remove("scale-100", "opacity-100");
-    modalContent.classList.add("scale-95", "opacity-0");
-    setTimeout(() => modal.classList.add("hidden"), 300);
-  } else {
-    modal.classList.add("hidden");
-  }
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP ! Statut : ${response.status}`);
+      }
 
-  eventBus.publish("modal:closed", { modalId });
-}
-
-
-eventBus.subscribe("comptes:externalUpdate", (data) => {
-  console.log("Mise à jour externe des comptes reçue", data);
-  // Recharger les données et rafraîchir l'affichage
-  loadComptesData();
-  refreshDisplay();
-});
-
-// Fonction pour rafraîchir l'affichage
-function refreshDisplay() {
-  const event = new Event('input');
-  const searchInput = document.getElementById("search");
-  if (searchInput) {
-    searchInput.dispatchEvent(event);
-  }
-}
-
-// Configurer les filtres
-function setupFilters() {
-  const searchInput = document.getElementById("search");
-  const roleSelect = document.getElementById("filter_role");
-  const statutSelect = document.getElementById("filter_statut");
-  const compteTableBody = document.querySelector("#compteTable tbody");
-
-  if (!searchInput || !roleSelect || !statutSelect || !compteTableBody) {
-    console.warn("Éléments nécessaires pour les filtres non trouvés");
-    return;
-  }
-
-  // Écouteurs pour les filtres
-  searchInput.addEventListener("input", filterAndDisplayComptes);
-  roleSelect.addEventListener("change", filterAndDisplayComptes);
-  statutSelect.addEventListener("change", filterAndDisplayComptes);
-
-  // Affichage initial
-  filterAndDisplayComptes();
-
-  function filterAndDisplayComptes() {
-    const searchQuery = searchInput.value.trim().toLowerCase();
-    const roleFilter = roleSelect.value;
-    const statutFilter = statutSelect.value;
-
-    const filteredComptes = comptes.filter((compte) => {
-      const nomPrenom = compte.nom_prenom ? compte.nom_prenom.toLowerCase() : "";
-      const matchesSearch = nomPrenom.includes(searchQuery);
-      const matchesRole = roleFilter === "" || compte.role === roleFilter;
-      const matchesStatut = statutFilter === "" || compte.statut === statutFilter;
-
-      return matchesSearch && matchesRole && matchesStatut;
-    });
-
-    // Mettre à jour le tableau
-    if (filteredComptes.length === 0) {
-      compteTableBody.innerHTML = `
-        <tr>
-          <td colspan="6" class="px-4 py-6 text-center">
-            <div class="flex flex-col items-center justify-center p-6 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl shadow-sm animate-fade-in">
-              <i class="fas fa-search text-4xl text-indigo-500 mb-4 animate-pulse"></i>
-              <h3 class="text-lg font-semibold text-gray-800 mb-2">Oups, aucun utilisateur trouvé !</h3>
-              <p class="text-sm text-gray-600">Essayez une autre recherche ou un autre filtre.</p>
-            </div>
-          </td>
-        </tr>
-      `;
-    } else {
-      compteTableBody.innerHTML = filteredComptes
-        .map((compte) => {
-          // Formater la date de dernière connexion
-          const connexionDate = compte.connexion ? new Date(compte.connexion).toLocaleDateString('fr-FR') : 'Jamais';
-          
-          // Définir les classes CSS selon le statut
-          let statutClass = '';
-          switch(compte.statut) {
-            case 'actif':
-              statutClass = 'bg-green-100 text-green-800';
-              break;
-            case 'inactif':
-              statutClass = 'bg-red-100 text-red-800';
-              break;
-            case 'suspendu':
-              statutClass = 'bg-yellow-100 text-yellow-800';
-              break;
-            default:
-              statutClass = 'bg-gray-100 text-gray-800';
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        return response.json();
+      } else {
+        return response.text().then((text) => {
+          console.log("Réponse texte suppression:", text);
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            throw new Error(
+              "Réponse non JSON reçue: " + text.substring(0, 200)
+            );
           }
+        });
+      }
+    })
+    .then((data) => {
+      console.log("Réponse serveur pour suppression:", data);
+      closeModal("deleteModal");
 
-          return `
-            <tr class="hover:bg-gray-50 transition-colors">
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                <div class="flex items-center">
-                  <div class="h-10 w-10 rounded-full flex items-center justify-center mr-3 border">
-                    ${
-                      compte.photo && compte.photo !== "NULL" && compte.photo !== ""
-                        ? `<img src="${compte.photo}" alt="Photo de ${compte.nom_prenom || "Utilisateur"}" class="w-10 h-10 rounded-full object-cover" onerror="this.parentNode.innerHTML = '${getInitialsCircle(compte.nom_prenom || "").replace(/'/g, "\\'")}';"/>`
-                        : getInitialsCircle(compte.nom_prenom || "")
-                    }
-                  </div>
-                  <div>
-                    <div class="text-sm font-medium text-gray-900">${compte.nom_prenom || "Nom inconnu"}</div>
-                  </div>
-                </div>
-              </td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  ${compte.role || "Non défini"}
-                </span>
-              </td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${compte.bureau || "Indéfini"}</td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${connexionDate}</td>
-              <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statutClass}">
-                  ${compte.statut || "Indéfini"}
-                </span>
-              </td>
-              <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                <button data-id="${compte.id}" title="Modifier" class="edit-compte-btn text-indigo-600 hover:text-indigo-900 focus:outline-none">
-                  <i class="fas fa-edit"></i>
-                </button>
-                <button data-id="${compte.id}" title="Supprimer" class="delete-compte-btn text-red-600 hover:text-red-900 focus:outline-none">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </td>
-            </tr>
-          `;
-        })
-        .join("");
-    }
-  }
+      if (data.success) {
+        showMessageModal(
+          "Succès",
+          data.messages.success || ["Compte supprimé avec succès."],
+          "success"
+        );
+        // Recharger la page pour actualiser les données
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        showMessageModal(
+          "Erreur",
+          data.messages.errors || [
+            "Une erreur s'est produite lors de la suppression.",
+          ],
+          "error"
+        );
+      }
+    })
+    .catch((error) => {
+      console.error("Erreur lors de la suppression:", error);
+      showMessageModal(
+        "Erreur",
+        ["Erreur lors de la suppression : " + error.message],
+        "error"
+      );
+    });
 }
 
-// Setup toggle pour afficher/masquer mot de passe
+// Configurer le toggle du mot de passe
 function setupPasswordToggle() {
   const passwordInput = document.getElementById("mot_de_passe");
   const eyeIcon = document.getElementById("eyeIcon");
-  
   if (!passwordInput || !eyeIcon || passwordToggleInitialized) return;
 
-  // Supprimer les anciens écouteurs
   const newEyeIcon = eyeIcon.cloneNode(true);
   eyeIcon.parentNode.replaceChild(newEyeIcon, eyeIcon);
 
-  // Ajouter le nouvel écouteur
   newEyeIcon.addEventListener("click", () => {
     if (passwordInput.type === "password") {
       passwordInput.type = "text";
@@ -564,97 +616,219 @@ function setupPasswordToggle() {
   passwordToggleInitialized = true;
 }
 
-// GESTION DE LA SOUMISSION DU FORMULAIRE EN AJAX
+// Afficher un modal
+export function showModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
 
-function setupFormSubmission() {
-  const compteForm = document.getElementById("compteForm");
-  if (!compteForm) return;
+  modal.classList.remove("hidden");
+  const modalContent = document.getElementById(`${modalId}Content`);
+  if (modalContent) {
+    setTimeout(() => {
+      modalContent.classList.remove("scale-95", "opacity-0");
+      modalContent.classList.add("scale-100", "opacity-100");
+    }, 10);
+  }
+  document.body.style.overflow = "hidden";
+}
 
-  compteForm.addEventListener("submit", function (e) {
-    e.preventDefault();
+// Fermer un modal
+export function closeModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
 
-    const formData = new FormData(this);
-    const submitButton = this.querySelector('button[type="submit"]');
-    
-    // Désactiver le bouton pendant la soumission
-    if (submitButton) {
-      submitButton.disabled = true;
-      const originalText = submitButton.innerHTML;
-      submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Traitement...';
-    }
+  const modalContent = document.getElementById(`${modalId}Content`);
+  if (modalContent) {
+    modalContent.classList.remove("scale-100", "opacity-100");
+    modalContent.classList.add("scale-95", "opacity-0");
+    setTimeout(() => {
+      modal.classList.add("hidden");
+      document.body.style.overflow = "auto";
+    }, 300);
+  } else {
+    modal.classList.add("hidden");
+    document.body.style.overflow = "auto";
+  }
 
-    // Ajouter un header pour identifier la requête AJAX
-    fetch(this.action, {
-      method: "POST",
-      body: formData,
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return response.json(); // Attendre une réponse JSON
-    })
-    .then((data) => {
-      console.log("Réponse serveur:", data);
+  eventBus.publish("modal:closed", { modalId });
+}
 
-      if (data.success) {
-        // Fermer le modal après succès
-        closeModal("compteModal");
+// Afficher le modal de messages
+function showMessageModal(title, messages, type) {
+  const messageModal = document.getElementById("messageModal");
+  const messageModalContent = document.getElementById("messageModalContent");
+  if (!messageModal || !messageModalContent) return;
 
-        // Rafraîchir la liste des comptes
-        loadComptesData();
-        
-        // Rafraîchir l'affichage
-        setTimeout(() => {
-          refreshDisplay();
-        }, 100);
+  const modalTitle = messageModalContent.querySelector("h3 span");
+  const icon = messageModalContent.querySelector("h3 i");
+  const messageContainer = messageModalContent.querySelector(".p-4.sm\\:p-6");
 
-        // Notification de succès
-        if (data.messages && data.messages.success && data.messages.success.length > 0) {
-          alert(data.messages.success.join('\n'));
-        } else {
-          alert("Opération réussie !");
-        }
-      } else {
-        // Afficher les erreurs
-        if (data.messages && data.messages.errors && data.messages.errors.length > 0) {
-          alert("Erreurs :\n" + data.messages.errors.join('\n'));
-        } else {
-          alert("Une erreur s'est produite.");
-        }
-      }
-    })
-    .catch((error) => {
-      console.error("Erreur lors de la soumission :", error);
-      alert("Erreur lors de l'envoi du formulaire. Veuillez réessayer.");
-    })
-    .finally(() => {
-      // Réactiver le bouton
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.innerHTML = '<i class="fas fa-save mr-2"></i> Enregistrer';
-      }
+  if (modalTitle && icon && messageContainer) {
+    modalTitle.textContent = title;
+    icon.className = `fas fa-info-circle mr-2 ${
+      type === "error" ? "text-red-500" : "text-green-600"
+    }`;
+
+    messageContainer.innerHTML =
+      messages
+        .map(
+          (msg) => `
+            <p class="${
+              type === "error" ? "text-red-500" : "text-green-600"
+            } font-semibold text-sm sm:text-base mb-2">
+                ${type === "error" ? "❌" : "✅"} ${msg}
+            </p>
+        `
+        )
+        .join("") +
+      `
+            <div class="flex justify-end mt-4">
+                <button type="button" class="close-modal px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all flex items-center">
+                    <i class="fas fa-times mr-2"></i> Fermer
+                </button>
+            </div>
+        `;
+  }
+
+  showModal("messageModal");
+}
+
+// Configurer les filtres
+function setupFilters() {
+  const searchInput = document.getElementById("search");
+  const roleSelect = document.getElementById("filter_role");
+  const statutSelect = document.getElementById("filter_statut");
+  const comptesTableBody = document.querySelector("#compteTable tbody");
+
+  if (!searchInput || !roleSelect || !statutSelect || !comptesTableBody) {
+    console.warn("Éléments nécessaires pour les filtres non trouvés");
+    return;
+  }
+
+  searchInput.addEventListener("input", filterAndDisplayComptes);
+  roleSelect.addEventListener("change", filterAndDisplayComptes);
+  statutSelect.addEventListener("change", filterAndDisplayComptes);
+
+  function filterAndDisplayComptes() {
+    const searchQuery = searchInput.value.trim().toLowerCase();
+    const roleFilter = roleSelect.value;
+    const statutFilter = statutSelect.value;
+
+    const filteredComptes = comptes.filter((compte) => {
+      const nomPrenom = compte.nom_prenom
+        ? compte.nom_prenom.toLowerCase()
+        : "";
+      const matchesSearch = nomPrenom.includes(searchQuery);
+      const matchesRole = roleFilter === "" || compte.role === roleFilter;
+      const matchesStatut =
+        statutFilter === "" || compte.statut === statutFilter;
+
+      return matchesSearch && matchesRole && matchesStatut;
     });
-  });
+
+    comptesTableBody.innerHTML =
+      filteredComptes.length === 0
+        ? `
+            <tr>
+                <td colspan="7" class="px-4 py-6 text-center">
+                    <div class="flex flex-col items-center justify-center p-6 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl shadow-sm animate-fade-in">
+                        <i class="fas fa-search text-4xl text-indigo-500 mb-4 animate-pulse"></i>
+                        <h3 class="text-lg font-semibold text-gray-800 mb-2">Oups, aucun compte trouvé !</h3>
+                        <p class="text-sm text-gray-600">Essayez une autre recherche.</p>
+                    </div>
+                </td>
+            </tr>
+        `
+        : filteredComptes
+            .map((compte) => {
+              const statutClass =
+                compte.statut === "activé"
+                  ? "bg-green-100 text-green-800"
+                  : "bg-red-100 text-red-800";
+              return `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="h-10 w-10 rounded-full flex items-center justify-center mr-3 border">
+                                ${
+                                  compte.photo &&
+                                  compte.photo !== "NULL" &&
+                                  compte.photo !== ""
+                                    ? `<img src="${compte.photo}" alt="${
+                                        compte.nom_prenom || "Utilisateur"
+                                      }" class="rounded-full object-cover" onerror="this.parentNode.innerHTML = '${getInitialsCircle(
+                                        compte.nom_prenom || ""
+                                      ).replace(/'/g, "\\'")}';"/>`
+                                    : getInitialsCircle(compte.nom_prenom || "")
+                                }
+                            </div>
+                            <div>
+                                <div class="text-sm font-medium text-gray-900">${
+                                  compte.nom_prenom || "Nom inconnu"
+                                }</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">${
+                          compte.role || "Non défini"
+                        }</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${
+                      compte.bureau || "Non défini"
+                    }</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${
+                      compte.connexion
+                        ? new Date(compte.connexion).toLocaleString("fr-FR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "Jamais"
+                    }</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statutClass}">${
+                compte.statut || "Non défini"
+              }</span>
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${
+                      compte.etat || "Non défini"
+                    }</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                        <div class="flex space-x-2 justify-end">
+                            <button class="edit-compte-btn text-blue-600 hover:text-blue-900 transition-colors" data-id="${
+                              compte.id
+                            }" title="Modifier">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="delete-compte-btn text-red-600 hover:text-red-900 transition-colors" data-id="${
+                              compte.id
+                            }" title="Supprimer">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            })
+            .join("");
+  }
 }
 
-// Version alternative si vous préférez ne pas utiliser AJAX
-function setupFormSubmissionClassic() {
-  const compteForm = document.getElementById("compteForm");
-  if (!compteForm) return;
-
-  compteForm.addEventListener("submit", function (e) {
-    const submitButton = this.querySelector('button[type="submit"]');
-    
-    
-    if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Traitement...';
-    }
-
-    
-  });
+// Rafraîchir l'affichage
+function refreshDisplay() {
+  const searchInput = document.getElementById("search");
+  if (searchInput) {
+    searchInput.dispatchEvent(new Event("input"));
+  }
 }
+
+// S'abonner aux événements externes
+eventBus.subscribe("comptes:externalUpdate", (data) => {
+  console.log("Mise à jour externe des comptes reçue", data);
+  loadComptesData();
+  loadAgentsData();
+  refreshDisplay();
+});
