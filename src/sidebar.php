@@ -29,7 +29,7 @@ try {
         <nav class="flex-1 py-4 px-2">
             <ul class="space-y-1">
                 <?php
-                $role = $_SESSION['role'] ?? 'sécrétaire'; 
+                $role = $_SESSION['role'] ?? 'secretaire'; 
                 $current_page = $_GET['page'] ?? 'dashboard_content';
 
                 $menu_items = [
@@ -55,6 +55,11 @@ if ($role === 'directrice') {
         'title' => 'Performance Agents',
         'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
     ];
+    
+    $menu_items['historique_content'] = [
+        'title' => 'Historique des actions',
+        'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+    ];
 }
 
 if ($role === 'chef de service') {
@@ -62,11 +67,12 @@ if ($role === 'chef de service') {
         'title' => 'Performance Agents',
         'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
     ];
-
+    
     $menu_items['historique_content'] = [
         'title' => 'Historique des actions',
         'icon' => 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
     ];
+
 }
 
 if ($role === 'admnistrateur') {

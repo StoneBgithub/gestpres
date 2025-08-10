@@ -17,6 +17,8 @@ export const pageTitles = {
   absence_content: "Gestion d'Absence",
   performance_content: "Performance des Agents",
   historique_content: "Historique des actions",
+  compte_content: "compte",
+  parametrage_content: "parametrage",
 };
 
 // Configuration des graphiques
