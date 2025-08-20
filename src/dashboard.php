@@ -21,7 +21,7 @@ $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) &&
 // Si c'est une requête AJAX, ne retourner que le contenu demandé
 if ($isAjax) {
     $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard_content';
-    $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content', 'performance_content','historique_content'];
+    $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absence_content', 'performance_content','historique_content','compte_content', 'parametrage_content'];
 
     // Restreindre l'accès à performance_content pour les viewers
     if ($page === 'performance_content' && $role === 'directrice') {
@@ -29,9 +29,11 @@ if ($isAjax) {
         echo json_encode(['error' => 'Accès non autorisé pour les utilisateurs avec le rôle viewer.']);
         exit();
     }
+    
 
     if (in_array($page, $valid_pages)) {
         include $page . '.php';
+        exit();
     } else {
         include 'dashboard_content.php';
     }
@@ -174,9 +176,10 @@ if ($isAjax) {
                             'dashboard_content' => 'Tableau de Bord',
                             'agents_content' => 'Gestion des Agents',
                             'presence_content' => 'Gestion de Présence',
-                            'absences_content' => 'Gestion d\'Absence',
+                            'absence_content' => 'Gestion des Absences',
                             'performance_content' => 'Performance des Agents',
-                            'historique_content' => 'Historique des actions'
+                            'historique_content' => 'Historique des Actions',
+                            'compte_content' => 'Gestion des utilisateurs',
                         ];
                         echo isset($menu_items[$page]) ? $menu_items[$page] : ucfirst(str_replace('_content', '', $page));
                         ?>
@@ -215,7 +218,7 @@ if ($isAjax) {
             <main class="p-6 content-transition" id="main-content">
                 <?php
                 $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard_content';
-                $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absences_content', 'performance_content', 'historique_content'];
+                $valid_pages = ['dashboard_content', 'agents_content', 'presence_content', 'absence_content', 'performance_content', 'historique_content', 'compte_content', 'parametrage_content'];
 
                 // Restreindre l'accès à performance_content pour les viewers
                 if (in_array($page, ['performance_content', 'historique_content']) && $role === 'secrétaire') {

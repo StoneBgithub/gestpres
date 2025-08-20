@@ -148,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                         $messages['success'][] = "Compte utilisateur enregistré avec succès.";
 
                         // Journalisation
-                        if ($agent_conn) {
+                        if ($login_id) {
                             $donnees = json_encode([
                                 'agent_id' => $agent_id_real,
                                 'email' => $agentData['email'],
@@ -164,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                                 VALUES (:ag_id, :action_type, :donnees, :date_action)
                             ");
                             $stmtLog->execute([
-                                ':ag_id' => $agent_conn,
+                                ':ag_id' => $login_id,
                                 ':action_type' => 'ajouter_compte',
                                 ':donnees' => $donnees,
                                 ':date_action' => date('Y-m-d H:i:s')
@@ -232,7 +232,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                             $messages['success'][] = "Compte utilisateur mis à jour avec succès.";
 
                             // Journalisation
-                            if ($agent_conn) {
+                            if ($login_id) {
                                 $donnees = json_encode([
                                     'agent_id' => $agent_id_real,
                                     'email' => $agentData['email'],
@@ -249,7 +249,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                                     VALUES (:ag_id, :action_type, :donnees, :date_action)
                                 ");
                                 $stmtLog->execute([
-                                    ':ag_id' => $agent_conn,
+                                    ':ag_id' => $login_id,
                                     ':action_type' => 'modifier_compte',
                                     ':donnees' => $donnees,
                                     ':date_action' => date('Y-m-d H:i:s')
@@ -260,9 +260,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                 }
             }
         } catch (PDOException $e) {
-            error_log("Exception PDO dans compte_content.php ($action) : " . $e->getMessage());
-            $messages['errors'][] = "Erreur serveur : Impossible de traiter la requête.";
-        }
+    error_log("Exception PDO dans compte_content.php ($action) : " . $e->getMessage());
+    error_log("Trace de l'erreur : " . $e->getTraceAsString());
+    $messages['errors'][] = "Erreur serveur : Impossible de traiter la requête. Détails : " . htmlspecialchars($e->getMessage());
+}
     }
 
     // Réponse JSON finale
@@ -284,14 +285,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $stmtDelete = $pdo->prepare("DELETE FROM login WHERE id = :id");
             $stmtDelete->execute([':id' => $id]);
             $messages['success'][] = "Compte supprimé avec succès.";
-            if ($agent_conn) {
+            if ($login_id) {
                 $donnees = json_encode(['agent_id' => $login['agent_id']], JSON_UNESCAPED_UNICODE);
                 $stmtLog = $pdo->prepare("
                     INSERT INTO journal_actions (ag_id, action_type, donnees, date_action)
                     VALUES (:ag_id, :action_type, :donnees, :date_action)
                 ");
                 $stmtLog->execute([
-                    ':ag_id' => $agent_conn,
+                    ':ag_id' => $login_id,
                     ':action_type' => 'supprimer_compte',
                     ':donnees' => $donnees,
                     ':date_action' => date('Y-m-d H:i:s')
@@ -402,7 +403,7 @@ echo '<script id="agentsData" type="application/json">' . json_encode($agents_bu
         <i class="fas fa-filter text-indigo-600 mr-2"></i>
         <h2 class="text-base sm:text-lg font-semibold text-gray-700">Recherche et filtres</h2>
     </div>
-    <form action="#" method="get" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <form action="./compte_content.php" method="get" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <input type="hidden" name="page" value="compte_content">
         <div class="relative">
             <label for="search" class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Recherche par

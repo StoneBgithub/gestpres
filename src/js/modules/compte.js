@@ -288,10 +288,13 @@ function setupListeners() {
       }
 
       // Requête AJAX corrigée
-      fetch(window.location.href, {
+      fetch("./compte_content.php", {
         method: "POST",
         body: formData,
         credentials: "same-origin",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest", // Assurer que la requête est marquée comme AJAX
+        },
       })
         .then((response) => {
           console.log("Statut de réponse:", response.status);
@@ -475,19 +478,18 @@ export function editCompte(compteId) {
   const agentSelect = document.getElementById("filter_agent");
 
   if (bureauSelect && agentSelect) {
-    const agent = agents.find((a) => a.id === compte.agent_id);
-    if (agent && agent.bureau) {
-      bureauSelect.value = agent.bureau;
-      updateModalAgentsOptions(agent.bureau);
-      setTimeout(() => {
-        agentSelect.value = agent.id;
-        document.getElementById("agent_idss").value = agent.id;
-      }, 100);
-    } else {
-      bureauSelect.value = "";
-      agentSelect.disabled = true;
-      agentSelect.innerHTML = '<option value="">Aucun agent trouvé</option>';
-    }
+    // Pré-remplir bureau (libele du bureau)
+    bureauSelect.value = compte.bureau || "";
+    bureauSelect.disabled = true; // Griser le bureau
+
+    // Pré-remplir agent : vider les options et ajouter seulement l'agent actuel
+    agentSelect.innerHTML = ""; // Vider les options
+    const option = document.createElement("option");
+    option.value = compte.agent_id;
+    option.textContent = compte.nom_prenom || "Agent inconnu";
+    agentSelect.appendChild(option);
+    agentSelect.value = compte.agent_id;
+    agentSelect.disabled = true; // Griser l'agent
   }
 
   passwordToggleInitialized = false;
@@ -530,10 +532,13 @@ function performDelete(compteId) {
 
   console.log("Suppression du compte ID:", compteId);
 
-  fetch(window.location.href, {
+  fetch("./compte_content.php", {
     method: "POST",
     body: formData,
     credentials: "same-origin",
+    headers: {
+      "X-Requested-With": "XMLHttpRequest", // Assurer que la requête est marquée comme AJAX
+    },
   })
     .then((response) => {
       console.log("Statut de réponse suppression:", response.status);
