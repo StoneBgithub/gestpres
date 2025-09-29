@@ -1,15 +1,61 @@
 <?php
-// Inclure le fichier de vérification d'authentification
 require_once './src/auth_check.php';
+require_once './src/db_connect.php'; // Connexion PDO
 
-// Si l'utilisateur est déjà connecté, le rediriger vers le tableau de bord
+// --- Fonction pour insérer les présences du jour ---
+function inserer_presences_du_jour($pdo) {
+    $today = new DateTime();
+
+    $stmt = $pdo->prepare("
+        SELECT agent_id, date_debut, date_fin
+        FROM absence
+        JOIN statut_absence ON absence.id_statut = statut_absence.id
+        WHERE LOWER(TRIM(statut_absence.libelle)) IN ('autorisé','approuvé','validé')
+          AND date_fin >= :today
+    ");
+    $stmt->execute(['today' => $today->format('Y-m-d')]);
+
+    $stmtPresence = $pdo->prepare("
+        INSERT INTO presence (agent_id, date, heure, type)
+        VALUES (:agent_id, :date, :heure, :type)
+    ");
+
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $absence) {
+        $date_debut = new DateTime($absence['date_debut']);
+        $date_fin = new DateTime($absence['date_fin']);
+
+        if ($today >= $date_debut && $today <= $date_fin) {
+            // Vérifier si présence déjà insérée
+            $check = $pdo->prepare("SELECT 1 FROM presence WHERE agent_id=:agent_id AND date=:date LIMIT 1");
+            $check->execute([
+                'agent_id' => $absence['agent_id'],
+                'date' => $today->format('Y-m-d'),
+            ]);
+
+            if (!$check->fetchColumn()) {
+                foreach (['arrivée'=>'08:50:00','depart'=>'14:30:00'] as $type => $heure) {
+                    $stmtPresence->execute([
+                        'agent_id' => $absence['agent_id'],
+                        'date' => $today->format('Y-m-d'),
+                        'heure' => $heure,
+                        'type' => $type,
+                    ]);
+                }
+            }
+        }
+    }
+}
+
+// --- Appeler la fonction à chaque chargement du site ---
+inserer_presences_du_jour($pdo);
+
+// --- Redirection si déjà connecté ---
 if (isLoggedIn()) {
     header('Location: ./src/dashboard.php');
     exit();
 }
-
-// Le reste du code HTML de l'index.php reste inchangé...
 ?>
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>

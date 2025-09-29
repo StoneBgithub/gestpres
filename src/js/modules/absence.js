@@ -1,92 +1,116 @@
 import { eventBus } from "../config.js";
 
-// Variables globales pour les données
+// Données globales
 let absences = [];
 let agents = [];
-let typesAbsence = [];
-let statuts = [];
 let bureaux = [];
-let roleUtilisateur = "secretaire"; // À récupérer dynamiquement si nécessaire
+let typesAbsences = [];
+let statutsAbsences = [];
+let roleUtilisateur = '';
 
+// Fonction pour générer le cercle d'initiales
 function getInitialsCircle(name) {
   if (!name)
     return '<div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center"><span class="text-blue-600 font-medium text-xs">NA</span></div>';
-
   const initials = name
     .split(" ")
     .map((word) => word[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
-
   return `<div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center"><span class="text-blue-600 font-medium text-xs">${initials}</span></div>`;
 }
 
+// Fonction pour générer l'affichage du justificatif avec icône
+function generateJustificatifDisplay(justificatif) {
+  if (!justificatif || justificatif === '' || justificatif === 'NULL') {
+    return '<span class="text-gray-400 italic">Aucun</span>';
+  }
+  
+  const ext = justificatif.split('.').pop().toLowerCase();
+  const url = justificatif;
+  
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+    return `<a href="${url}" target="_blank" title="Voir l'image" class="text-blue-600 hover:opacity-75 text-xl">
+      <i class="fas fa-eye"></i>
+    </a>`;
+  } else if (ext === 'pdf') {
+    return `<a href="${url}" target="_blank" title="Voir le PDF" class="text-red-600 hover:opacity-75 text-xl">
+      <i class="fas fa-eye"></i>
+    </a>`;
+  } else {
+    return `<a href="${url}" target="_blank" title="Télécharger le fichier" class="text-gray-600 hover:opacity-75 text-xl">
+      <i class="fas fa-eye"></i>
+    </a>`;
+  }
+}
+
+// Fonction d'initialisation principale
 export function init() {
   console.log("Initialisation du module de gestion des absences");
   loadAbsencesData();
   loadAgentsData();
   loadBureauxData();
-  loadStatutsData();
-  loadTypesAbsenceData();
-  loadUserRole();
+  loadTypesAbsencesData();
+  loadStatutsAbsencesData();
+  loadRoleUtilisateur();
   initModals();
-  setupFiltersAbsences();
   setupListeners();
+  setupFilters();
   checkAndShowMessageModal();
 }
 
-// [Fonctions de chargement des données - inchangées]
+// Charger les données des absences
 function loadAbsencesData() {
   const absencesDataElement = document.getElementById("AbsencesDatas");
-
   if (absencesDataElement) {
     try {
       absences = JSON.parse(absencesDataElement.textContent).map((absence, index) => {
         if (!absence.id) {
-          absence.id = absence.absence_id || absence._id || null;
+          absence.id = absence._id || `temp-id-${index}`;
           console.warn(`Absence à l'index ${index} n'a pas d'ID défini`, absence);
         }
-
         absence.id = String(absence.id);
         return absence;
       });
-
       console.log(`${absences.length} absences chargées`);
     } catch (e) {
-      console.error("Erreur lors du parsing des données d'absences :", e);
+      console.error("Erreur lors du parsing des données absences:", e);
       absences = [];
-      alert("Erreur lors du chargement des données des absences.");
     }
-  } else {
-    console.warn("Élément AbsencesDatas non trouvé");
   }
 }
 
+// Charger les données des agents
 function loadAgentsData() {
   const agentsDataElement = document.getElementById("AgentsDatas");
   if (agentsDataElement) {
     try {
       agents = JSON.parse(agentsDataElement.textContent);
-      console.log(`${agents.length} agents chargés`);
-      console.log("Structure des agents:", agents[0]); // Debug
+      console.log(`${agents.length} agents chargés:`, agents);
+      
+      // Vérification de la structure des données
+      if (agents.length > 0) {
+        console.log("Structure du premier agent:", Object.keys(agents[0]));
+        console.log("Exemple agent:", agents[0]);
+      }
     } catch (e) {
       console.error("Erreur lors du parsing des données agents:", e);
+      console.error("Contenu de l'élément:", agentsDataElement.textContent);
       agents = [];
     }
+  } else {
+    console.error("Élément AgentsDatas non trouvé dans le DOM");
   }
 }
 
-/**
- * Charge les données des bureaux.
- */
+// Charger les données des bureaux
 function loadBureauxData() {
   const bureauxDataElement = document.getElementById("bureauxDatas");
   if (bureauxDataElement) {
     try {
       bureaux = JSON.parse(bureauxDataElement.textContent);
       console.log(`${bureaux.length} bureaux chargés`);
-      console.log("Structure des bureaux:", bureaux[0]); // Debug
     } catch (e) {
       console.error("Erreur lors du parsing des données bureaux:", e);
       bureaux = [];
@@ -94,77 +118,49 @@ function loadBureauxData() {
   }
 }
 
-function loadTypesAbsenceData() {
+// Charger les types d'absences
+function loadTypesAbsencesData() {
   const typesDataElement = document.getElementById("typesAbsencesDatas");
-
   if (typesDataElement) {
     try {
-      typesAbsence = JSON.parse(typesDataElement.textContent);
-      console.log(`${typesAbsence.length} types d'absences chargés`);
+      typesAbsences = JSON.parse(typesDataElement.textContent);
+      console.log(`${typesAbsences.length} types d'absences chargés`);
     } catch (e) {
-      console.error("Erreur lors du parsing des types d'absence :", e);
-      typesAbsence = [];
+      console.error("Erreur lors du parsing des types d'absences:", e);
+      typesAbsences = [];
     }
-  } else {
-    console.warn("Élément typesAbsencesDatas non trouvé");
   }
 }
 
-function loadStatutsData() {
+// Charger les statuts d'absences
+function loadStatutsAbsencesData() {
   const statutsDataElement = document.getElementById("statutsAbsencesDatas");
-
   if (statutsDataElement) {
     try {
-      statuts = JSON.parse(statutsDataElement.textContent);
-      console.log(`${statuts.length} statuts chargés`);
+      statutsAbsences = JSON.parse(statutsDataElement.textContent);
+      console.log(`${statutsAbsences.length} statuts d'absences chargés`);
     } catch (e) {
-      console.error("Erreur lors du parsing des statuts :", e);
-      statuts = [];
+      console.error("Erreur lors du parsing des statuts d'absences:", e);
+      statutsAbsences = [];
     }
-  } else {
-    console.warn("Élément statutsAbsencesDatas non trouvé");
   }
 }
 
-function loadUserRole() {
+// Charger le rôle de l'utilisateur
+function loadRoleUtilisateur() {
   const roleElement = document.getElementById("roleUtilisateur");
   if (roleElement) {
     try {
-      roleUtilisateur = JSON.parse(roleElement.textContent) || "secretaire";
-      console.log(`Rôle utilisateur chargé : ${roleUtilisateur}`);
+      roleUtilisateur = JSON.parse(roleElement.textContent);
+      console.log("Rôle utilisateur:", roleUtilisateur);
     } catch (e) {
       console.error("Erreur lors du parsing du rôle utilisateur:", e);
-      roleUtilisateur = "secretaire";
+      roleUtilisateur = '';
     }
-  } else {
-    console.warn("Élément roleUtilisateur non trouvé, utilisation du rôle par défaut");
   }
 }
 
-eventBus.subscribe("comptes:externalUpdate", (data) => {
-  console.log("Mise à jour externe des comptes reçue", data);
-  loadAbsencesData();
-  loadAgentsData();
-  refreshDisplay();
-});
-
-function getTypeAbsenceLibelle(typeId) {
-  if (!typeId) return 'Non défini';
-  const type = typesAbsence.find(t => String(t.id) === String(typeId));
-  return type ? type.libelle : 'Non défini';
-}
-
-function getStatutLibelle(statutInput) {
-  if (!statutInput) return 'Inconnu';
-  
-  if (typeof statutInput === 'string') {
-    return statutInput.toLowerCase().trim();
-  }
-  
-  const statut = statuts.find(s => String(s.id) === String(statutInput));
-  return statut ? statut.libelle.toLowerCase().trim() : 'Inconnu';
-}
-
+// Vérifier et afficher messageModal si des messages sont présents
 function checkAndShowMessageModal() {
   const messageModal = document.getElementById("messageAbsences");
   if (messageModal && messageModal.dataset.messages) {
@@ -174,6 +170,7 @@ function checkAndShowMessageModal() {
         (messages.success && messages.success.length > 0) ||
         (messages.errors && messages.errors.length > 0)
       ) {
+        console.log("Messages détectés:", messages);
         showModal("messageAbsences");
       }
     } catch (e) {
@@ -182,320 +179,479 @@ function checkAndShowMessageModal() {
   }
 }
 
+// Initialiser les modales
 function initModals() {
-  // Gestion des boutons de fermeture
-  document.querySelectorAll(".close-modals").forEach((btn) => {
-    btn.addEventListener("click", function () {
-      const modal = this.closest("#absenceModal, #deleteAbsenceModal, #messageAbsences, #authorizeAbsenceModal, #rejectAbsenceModal");
+  document.querySelectorAll(".close-modal, .close-modals").forEach(btn => {
+    btn.addEventListener("click", function() {
+      const modal = this.closest("#absenceModal, #deleteAbsenceModal, #authorizeAbsenceModal, #rejectAbsenceModal, #messageAbsences");
       if (modal) {
         closeModal(modal.id);
       }
     });
   });
-  
-  // Gestion des clics en dehors des modaux
-  document
-    .querySelectorAll("#absenceModal, #deleteAbsenceModal, #messageAbsences, #authorizeAbsenceModal, #rejectAbsenceModal")
-    .forEach((modal) => {
-      modal.addEventListener("click", function (e) {
-        if (e.target === this) {
-          closeModal(this.id);
-        }
-      });
+
+  // Fermer les modales en cliquant à l'extérieur
+  document.querySelectorAll("#absenceModal, #deleteAbsenceModal, #authorizeAbsenceModal, #rejectAbsenceModal, #messageAbsences").forEach(modal => {
+    modal.addEventListener("click", function(e) {
+      if (e.target === this) {
+        closeModal(this.id);
+      }
     });
-
-  // AJOUT: Créer le modal de rejet s'il n'existe pas
-  createRejectModalIfNotExists();
-}
-
-function createRejectModalIfNotExists() {
-  if (!document.getElementById("rejectAbsenceModal")) {
-    const rejectModalHTML = `
-      <div id="rejectAbsenceModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md" id="rejectAbsenceModalContent">
-          <h3 class="text-lg font-semibold text-red-600 mb-4">
-            <i class="fas fa-times-circle mr-2"></i> Rejeter cette absence ?
-          </h3>
-          <p class="text-gray-700 mb-6">Confirmez-vous le rejet de cette absence ?</p>
-          <div class="flex justify-end gap-2">
-            <button class="close-modals px-4 py-2 bg-gray-300 rounded">Annuler</button>
-            <a id="confirmRejectAbsenceBtn" href="#" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
-              <i class="fas fa-times mr-1"></i> Rejeter
-            </a>
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', rejectModalHTML);
-  }
-}
-
-function showModal(modalId) {
-  const modal = document.getElementById(modalId);
-  if (!modal) {
-    console.error(`Modal ${modalId} introuvable`);
-    return;
-  }
-
-  modal.classList.remove("hidden");
-  const modalContent = modal.querySelector("[id$='Content'], .bg-white");
-  if (modalContent) {
-    setTimeout(() => {
-      modalContent.classList.remove("scale-95", "opacity-0");
-      modalContent.classList.add("scale-100", "opacity-100");
-    }, 10);
-  }
-}
-
-// FONCTION AJOUTÉE : Met à jour les options des agents selon le bureau sélectionné
-function updateModalAgentsOptions(selectedBureau) {
-  const agentSelect = document.getElementById("filter_agents");
-  if (!agentSelect) {
-    console.error("Element filter_agents non trouvé");
-    return;
-  }
-
-  console.log("Mise à jour des agents pour le bureau:", selectedBureau);
-  console.log("Agents disponibles:", agents);
-
-  // Réinitialiser les options
-  agentSelect.innerHTML = '<option value="">Choisir un agent</option>';
-
-  if (!selectedBureau) {
-    agentSelect.disabled = true;
-    return;
-  }
-
-  // Filtrer les agents par bureau (utilise 'bureau' au lieu de 'libele_bureau')
-  const agentsDuBureau = agents.filter(agent => {
-    // Vérifier plusieurs possibilités selon la structure des données
-    return agent.bureau === selectedBureau || 
-           agent.libele_bureau === selectedBureau ||
-           agent.bureau_libelle === selectedBureau;
   });
 
-  console.log("Agents filtrés pour le bureau:", agentsDuBureau);
-
-  if (agentsDuBureau.length === 0) {
-    agentSelect.innerHTML = '<option value="">Aucun agent trouvé pour ce bureau</option>';
-    agentSelect.disabled = true;
-    return;
-  }
-
-  // Ajouter les agents du bureau sélectionné
-  agentsDuBureau.forEach(agent => {
-    const option = document.createElement('option');
-    option.value = agent.id;
-    option.textContent = agent.nom_prenom || `${agent.prenom || ''} ${agent.nom || ''}`.trim();
-    agentSelect.appendChild(option);
+  // Fermeture avec Échap
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") {
+      closeModal("absenceModal");
+      closeModal("deleteAbsenceModal");
+      closeModal("authorizeAbsenceModal");
+      closeModal("rejectAbsenceModal");
+      closeModal("messageAbsences");
+    }
   });
-
-  agentSelect.disabled = false;
 }
 
+// Configurer les écouteurs d'événements
 function setupListeners() {
-  document.body.addEventListener("click", function (e) {
+  document.body.addEventListener("click", function(e) {
     const target = e.target;
 
-    // Bouton "Ajouter une absence"
+    // Bouton "Nouvelle absence"
     if (target.matches(".add-absence-btns") || target.closest(".add-absence-btns")) {
-      const btn = target.matches(".add-absence-btns") ? target : target.closest(".add-absence-btns");
+      e.preventDefault();
       addAbsence();
-      return;
     }
 
-    // Bouton "Modifier une absence"
+    // Boutons d'édition
     if (target.matches(".edit-absence-btn") || target.closest(".edit-absence-btn")) {
+      e.preventDefault();
       const btn = target.matches(".edit-absence-btn") ? target : target.closest(".edit-absence-btn");
       const absenceId = btn.getAttribute("data-id");
       editAbsence(absenceId);
-      return;
     }
 
-    // Bouton "Supprimer une absence"
+    // Boutons de suppression
     if (target.matches(".delete-absence-btn") || target.closest(".delete-absence-btn")) {
+      e.preventDefault();
       const btn = target.matches(".delete-absence-btn") ? target : target.closest(".delete-absence-btn");
       const absenceId = btn.getAttribute("data-id");
       confirmDeleteAbsence(absenceId);
-      return;
     }
 
-    // Bouton "Autoriser / Valider une absence"
-    if (
-      target.matches(".validate-absence-btn") || target.closest(".validate-absence-btn") ||
-      target.matches(".authorize-absence-btn") || target.closest(".authorize-absence-btn")
-    ) {
-      const btn = target.closest(".validate-absence-btn, .authorize-absence-btn");
+    // Boutons de validation
+    if (target.matches(".validate-absence-btn") || target.closest(".validate-absence-btn")) {
+      e.preventDefault();
+      const btn = target.matches(".validate-absence-btn") ? target : target.closest(".validate-absence-btn");
       const absenceId = btn.getAttribute("data-id");
       confirmAuthorizeAbsence(absenceId);
-      return;
     }
 
-    // Bouton "Rejeter une absence"
+    // Boutons de rejet
     if (target.matches(".reject-absence-btn") || target.closest(".reject-absence-btn")) {
+      e.preventDefault();
       const btn = target.matches(".reject-absence-btn") ? target : target.closest(".reject-absence-btn");
       const absenceId = btn.getAttribute("data-id");
       confirmRejectAbsence(absenceId);
-      return;
     }
   });
 
+  // Gestion du sélecteur de bureau pour mettre à jour les agents
   const modalBureauSelect = document.getElementById("filter_bureaux");
   if (modalBureauSelect) {
-    console.log("Event listener ajouté pour filter_bureaux");
-    modalBureauSelect.addEventListener("change", function () {
-      console.log("Changement de bureau détecté:", this.value);
+    modalBureauSelect.addEventListener("change", function() {
       updateModalAgentsOptions(this.value);
-
-      const agentSelect = document.getElementById("filter_agents");
-      if (!agentSelect) return;
-
-      if (!this.value) {
-        // Si aucun bureau sélectionné, désactive le sélecteur agent
-        agentSelect.disabled = true;
-        agentSelect.innerHTML = '<option value="">Choisir un agent</option>';
-      } else {
-        // Active le sélecteur agent
-        agentSelect.disabled = false;
-      }
     });
-  } else {
-    console.error("Element filter_bureaux non trouvé lors du setup des listeners");
+  }
+
+  // Soumission du formulaire d'absence
+  const absenceForm = document.getElementById("absenceForm");
+  if (absenceForm) {
+    absenceForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      console.log("=== DÉBUT SOUMISSION FORMULAIRE ===");
+
+      const bureauSelect = document.getElementById("filter_bureaux");
+      const agentSelect = document.getElementById("filter_agents");
+      const typeSelect = document.getElementById("filter_types");
+      const dateDebut = document.getElementById("filter_date_debut");
+      const dateFin = document.getElementById("filter_date_fin");
+      const justificatif = document.getElementById("justificatif");
+      const description = document.getElementById("description");
+      const action = document.getElementById("formActions").value;
+      const absenceId = document.getElementById("absence_id").value;
+
+      // Validation améliorée avec logs détaillés
+      let errors = [];
+      
+      console.log("Valeurs des champs:");
+      console.log("- Bureau:", bureauSelect ? bureauSelect.value : "ÉLÉMENT MANQUANT");
+      console.log("- Agent:", agentSelect ? agentSelect.value : "ÉLÉMENT MANQUANT");
+      console.log("- Type:", typeSelect ? typeSelect.value : "ÉLÉMENT MANQUANT");
+      console.log("- Date début:", dateDebut ? dateDebut.value : "ÉLÉMENT MANQUANT");
+      console.log("- Date fin:", dateFin ? dateFin.value : "ÉLÉMENT MANQUANT");
+      console.log("- Action:", action);
+      console.log("- ID absence:", absenceId);
+
+      // Vérifications avec messages spécifiques
+      if (!bureauSelect) {
+        errors.push("Élément 'bureau' non trouvé dans le DOM.");
+      } else if (!bureauSelect.value || bureauSelect.value.trim() === "") {
+        errors.push("Veuillez sélectionner un bureau.");
+      }
+
+      if (!agentSelect) {
+        errors.push("Élément 'agent' non trouvé dans le DOM.");
+      } else if (!agentSelect.value || agentSelect.value.trim() === "") {
+        errors.push("Veuillez sélectionner un agent.");
+      }
+
+      if (!typeSelect) {
+        errors.push("Élément 'type d'absence' non trouvé dans le DOM.");
+      } else if (!typeSelect.value || typeSelect.value.trim() === "") {
+        errors.push("Veuillez sélectionner un motif d'absence.");
+      }
+
+      if (!dateDebut) {
+        errors.push("Élément 'date de début' non trouvé dans le DOM.");
+      } else if (!dateDebut.value || dateDebut.value.trim() === "") {
+        errors.push("Veuillez saisir la date de début.");
+      }
+
+      if (!dateFin) {
+        errors.push("Élément 'date de fin' non trouvé dans le DOM.");
+      } else if (!dateFin.value || dateFin.value.trim() === "") {
+        errors.push("Veuillez saisir la date de fin.");
+      }
+
+      // Validation des dates
+      if (dateDebut && dateFin && dateDebut.value && dateFin.value) {
+        const debut = new Date(dateDebut.value);
+        const fin = new Date(dateFin.value);
+        if (debut > fin) {
+          errors.push("La date de début ne peut pas être postérieure à la date de fin.");
+        }
+      }
+
+      if (errors.length > 0) {
+        console.error("Erreurs de validation:", errors);
+        showMessageModal("Erreur de validation", errors, "error");
+        return false;
+      }
+
+      // Préparation des données avec vérifications
+      const formData = new FormData();
+      
+      formData.append("action", action);
+      if (absenceId && absenceId.trim() !== "") {
+        formData.append("absence_id", absenceId);
+      }
+      formData.append("agent_id", agentSelect.value);
+      formData.append("motif", typeSelect.value);
+      formData.append("date_debut", dateDebut.value);
+      formData.append("date_fin", dateFin.value);
+      formData.append("description", description ? description.value : "");
+      
+      // Gestion du fichier
+      if (justificatif && justificatif.files && justificatif.files.length > 0) {
+        console.log("Fichier détecté:", justificatif.files[0].name, justificatif.files[0].size, "bytes");
+        formData.append("justificatif", justificatif.files[0]);
+      } else {
+        console.log("Aucun fichier sélectionné");
+      }
+
+      // Debug: afficher le contenu du FormData
+      console.log("Contenu FormData:");
+      for (let [key, value] of formData.entries()) {
+        console.log(`- ${key}:`, value);
+      }
+
+      const submitButton = this.querySelector('button[type="submit"]');
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Traitement...';
+      }
+
+      // Requête AJAX améliorée
+      fetch("?page=absence_content", {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      })
+      .then((response) => {
+        console.log("=== RÉPONSE SERVEUR ===");
+        console.log("Status:", response.status);
+        console.log("Headers:", Object.fromEntries(response.headers.entries()));
+        
+        if (!response.ok) {
+          throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        return response.text();
+      })
+      .then((responseText) => {
+        console.log("Réponse brute du serveur:");
+        console.log(responseText);
+
+        let data;
+        try {
+          data = JSON.parse(responseText);
+          console.log("Données parsées:", data);
+        } catch (e) {
+          console.warn("Impossible de parser en JSON, traitement en tant que HTML");
+          
+          if (responseText.includes("Fatal error") || responseText.includes("Parse error")) {
+            throw new Error("Erreur PHP détectée dans la réponse");
+          }
+          
+          data = { success: true, reload: true, message: "Opération réussie (redirection)" };
+        }
+
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.innerHTML = '<i class="fas fa-save mr-2"></i> Enregistrer';
+        }
+
+        closeModal("absenceModal");
+
+        if (data.success || data.reload) {
+          const successMessages = data.messages?.success || 
+                                 data.message ? [data.message] : 
+                                 ["Absence enregistrée avec succès."];
+          
+          showMessageModal("Succès", successMessages, "success");
+          
+          setTimeout(() => {
+            console.log("Rechargement de la page...");
+            window.location.reload();
+          }, 1500);
+        } else {
+          const errorMessages = data.messages?.errors || 
+                               data.error ? [data.error] :
+                               ["Une erreur est survenue lors de l'enregistrement."];
+          
+          console.error("Erreurs serveur:", errorMessages);
+          showMessageModal("Erreur", errorMessages, "error");
+        }
+      })
+      .catch((error) => {
+        console.error("=== ERREUR REQUÊTE ===");
+        console.error("Type:", error.name);
+        console.error("Message:", error.message);
+        console.error("Stack:", error.stack);
+
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.innerHTML = '<i class="fas fa-save mr-2"></i> Enregistrer';
+        }
+
+        showMessageModal(
+          "Erreur technique",
+          ["Erreur lors de l'envoi : " + error.message],
+          "error"
+        );
+      });
+
+      console.log("=== FIN SOUMISSION FORMULAIRE ===");
+    });
   }
 }
 
-/**
- * Ouvre le modal pour ajouter un compte.
- */
-export function addAbsence() {
-  const modal = document.getElementById("absenceModal");
-  if (!modal) return;
+// Mettre à jour les options des agents selon le bureau
+function updateModalAgentsOptions(bureauLibele) {
+  const agentSelect = document.getElementById("filter_agents");
+  if (!agentSelect) {
+    console.error("Élément filter_agents non trouvé");
+    return;
+  }
 
-  document.getElementById("absenceTitle").innerHTML =
-    '<i class="fas fa-user-plus mr-2 text-indigo-600"></i><span>Ajouter une nouvelle absence</span>';
+  console.log("Mise à jour agents pour bureau:", bureauLibele);
+  console.log("Agents disponibles:", agents);
+
+  agentSelect.innerHTML = '<option value="">Choisir un agent</option>';
+  agentSelect.disabled = true;
+
+  if (bureauLibele && bureauLibele.trim() !== "") {
+    const agentsDuBureau = agents.filter(agent => {
+      const bureauAgent = agent.bureau || agent.libele || agent.libele_bureau || "";
+      return bureauAgent.toLowerCase() === bureauLibele.toLowerCase();
+    });
+    
+    console.log(`Agents trouvés pour le bureau "${bureauLibele}":`, agentsDuBureau);
+
+    if (agentsDuBureau.length > 0) {
+      agentsDuBureau.forEach(agent => {
+        const option = document.createElement("option");
+        option.value = agent.id;
+        option.textContent = agent.nom_prenom || `${agent.nom || ''} ${agent.prenom || ''}`.trim();
+        agentSelect.appendChild(option);
+        console.log("Agent ajouté:", option.textContent, "ID:", option.value);
+      });
+      agentSelect.disabled = false;
+    } else {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "Aucun agent disponible pour ce bureau";
+      agentSelect.appendChild(option);
+      console.warn("Aucun agent trouvé pour ce bureau");
+    }
+  }
+}
+
+// Ouvrir le modal d'ajout d'absence
+export function addAbsence() {
+  console.log("=== OUVERTURE MODAL AJOUT ABSENCE ===");
+  
+  const modal = document.getElementById("absenceModal");
+  if (!modal) {
+    console.error("Modal absenceModal non trouvé");
+    return;
+  }
+
+  const elementsToCheck = [
+    "absenceTitle",
+    "absenceForm", 
+    "absence_id",
+    "formActions",
+    "filter_bureaux",
+    "filter_agents",
+    "filter_types",
+    "filter_date_debut", 
+    "filter_date_fin",
+    "justificatif",
+    "description"
+  ];
+
+  elementsToCheck.forEach(id => {
+    const element = document.getElementById(id);
+    console.log(`Élément ${id}:`, element ? "✓ Trouvé" : "✗ MANQUANT");
+  });
+
+  const titleElement = document.getElementById("absenceTitle");
+  if (titleElement) {
+    titleElement.innerHTML =
+      '<i class="fas fa-calendar-plus mr-2 text-indigo-600"></i><span>Ajouter une nouvelle absence</span>';
+  }
 
   const form = document.getElementById("absenceForm");
   if (form) {
     form.reset();
+    
+    const absenceIdField = document.getElementById("absence_id");
+    const actionField = document.getElementById("formActions");
+    
+    if (absenceIdField) absenceIdField.value = "";
+    if (actionField) actionField.value = "add";
 
-    // Définir l'action pour ajout
-    document.getElementById("actions").value = "add";
-    document.getElementById("absence_id").value = "";
-
-    // Réinitialiser et désactiver le select agent
+    const bureauSelect = document.getElementById("filter_bureaux");
     const agentSelect = document.getElementById("filter_agents");
+    const typeSelect = document.getElementById("filter_types");
+    const dateDebut = document.getElementById("filter_date_debut");
+    const dateFin = document.getElementById("filter_date_fin");
+    const justificatif = document.getElementById("justificatif");
+    const description = document.getElementById("description");
+    
+    if (bureauSelect) {
+      bureauSelect.value = "";
+      bureauSelect.disabled = false;
+    }
+    
     if (agentSelect) {
       agentSelect.disabled = true;
       agentSelect.innerHTML = '<option value="">Choisir un agent</option>';
     }
-
-    // Réinitialiser le select bureau
-    const bureauSelect = document.getElementById("filter_bureaux");
-    if (bureauSelect) {
-      bureauSelect.value = "";
-    }
-
-    // Réinitialiser le motif
-    const motifSelect = document.getElementById("filter_types");
-    if (motifSelect) {
-      motifSelect.value = "";
-    }
-
-    // Réinitialiser les dates et description (le reset du form le fait déjà, mais ici par sécurité)
-    const dateDebutInput = document.getElementById("filter_date_debut");
-    const dateFinInput = document.getElementById("filter_date_fin");
-    const descriptionInput = document.getElementById("description");
     
-    if (dateDebutInput) dateDebutInput.value = "";
-    if (dateFinInput) dateFinInput.value = "";
-    if (descriptionInput) descriptionInput.value = "";
+    if (typeSelect) {
+      typeSelect.value = "";
+      typeSelect.disabled = false;
+    }
+    
+    if (dateDebut) dateDebut.value = "";
+    if (dateFin) dateFin.value = "";
+    if (justificatif) justificatif.value = "";
+    if (description) description.value = "";
   }
 
   showModal("absenceModal");
+  console.log("Modal d'ajout ouvert");
 }
 
+// Ouvre le modal d'édition pour une absence
 export function editAbsence(absenceId) {
   const modal = document.getElementById("absenceModal");
   if (!modal) return;
 
-  document.getElementById("absenceTitle").innerHTML =
-    '<i class="fas fa-user-edit mr-2 text-indigo-600"></i><span>Modifier une absence</span>';
-
-  const absenceIdStr = String(absenceId);
-  const absence = absences.find((a) => String(a.id) === absenceIdStr);
-  if (!absence) {
-    alert("Absence non trouvée.");
-    return;
+  const titleElement = document.getElementById("absenceTitle");
+  if (titleElement) {
+    titleElement.innerHTML =
+      '<i class="fas fa-calendar-edit mr-2 text-indigo-600"></i><span>Modifier une absence</span>';
   }
 
-  const agent = agents.find((a) => String(a.id) === String(absence.agent_id));
-  if (!agent) {
-    alert("Agent introuvable.");
+  const absenceIdStr = String(absenceId);
+  const absence = absences.find((a) => a.id === absenceIdStr);
+  if (!absence) {
+    showMessageModal("Erreur", ["Absence non trouvée."], "error");
     return;
   }
 
   const form = document.getElementById("absenceForm");
   if (!form) return;
 
-  // Préparer les champs à remplir
-  const fields = {
-    actions: "update",
-    absence_id: absence.id || "",
-    filter_date_debut: absence.date_debut || "",
-    filter_date_fin: absence.date_fin || "",
-    description: absence.description || "",
-    filter_types: absence.motif || "",
-  };
+  form.reset();
 
-  for (const [id, value] of Object.entries(fields)) {
-    const field = document.getElementById(id);
-    if (field) {
-      field.value = value;
-    }
-  }
+  document.getElementById("absence_id").value = absence.id || "";
+  document.getElementById("formActions").value = "update";
 
   const bureauSelect = document.getElementById("filter_bureaux");
   const agentSelect = document.getElementById("filter_agents");
 
-  const bureauAgent =
-    agent.bureau ||
-    agent.libelle_bureau ||
-    agent.bureau_libelle ||
-    agent.bureau_id;
+  if (bureauSelect && agentSelect) {
+    const agent = agents.find(a => a.id == absence.agent_id);
+    if (agent) {
+      bureauSelect.value = agent.bureau || "";
+      updateModalAgentsOptions(agent.bureau || "");
+      setTimeout(() => {
+        agentSelect.value = absence.agent_id;
+      }, 100);
+    }
+  }
 
-  if (bureauAgent && bureauSelect) {
-    bureauSelect.value = bureauAgent;
+  const typeSelect = document.getElementById("filter_types");
+  if (typeSelect) {
+    const typeAbsence = typesAbsences.find(t => t.libelle === absence.motif);
+    if (typeAbsence) {
+      typeSelect.value = typeAbsence.id;
+    }
+  }
 
-    // Met à jour la liste des agents selon le bureau
-    updateModalAgentsOptions(bureauAgent);
+  const dateDebut = document.getElementById("filter_date_debut");
+  const dateFin = document.getElementById("filter_date_fin");
+  if (dateDebut) {
+    dateDebut.value = absence.debut || absence.date_debut || "";
+  }
+  if (dateFin) {
+    dateFin.value = absence.fin || absence.date_fin || "";
+  }
 
-    // Sélectionne l'agent une fois les options mises à jour
-    setTimeout(() => {
-      if (agentSelect) {
-        agentSelect.disabled = false;
-        agentSelect.value = agent.id;
-      }
-    }, 100);
+  const justificatif = document.getElementById("justificatif");
+  if (justificatif) {
+    justificatif.value = "";
+  }
+
+  const description = document.getElementById("description");
+  if (description) {
+    description.value = absence.description || "";
   }
 
   showModal("absenceModal");
 }
 
-
+// Confirmer suppression d'absence
 export function confirmDeleteAbsence(absenceId) {
-  console.log("confirmDeleteAbsence appelée avec ID:", absenceId);
   const modal = document.getElementById("deleteAbsenceModal");
-  if (!modal) {
-    console.error("Modal deleteAbsenceModal introuvable");
-    return;
-  }
-
-  const absenceIdStr = String(absenceId);
-  const absence = absences.find((a) => String(a.id) === absenceIdStr);
-  if (!absence) {
-    alert("Absence non trouvée pour suppression.");
-    return;
-  }
+  if (!modal) return;
 
   const confirmDeleteBtn = document.getElementById("confirmDeleteAbsenceBtn");
   if (confirmDeleteBtn) {
@@ -503,283 +659,515 @@ export function confirmDeleteAbsence(absenceId) {
   }
 
   showModal("deleteAbsenceModal");
-  eventBus.publish("absences:deleteRequested", { absenceId });
 }
 
+// Confirmer autorisation d'absence
+export function confirmAuthorizeAbsence(absenceId) {
+  const modal = document.getElementById("authorizeAbsenceModal");
+  if (!modal) return;
+
+  const confirmAuthorizeBtn = document.getElementById("confirmAuthorizeAbsenceBtn");
+  if (confirmAuthorizeBtn) {
+    confirmAuthorizeBtn.onclick = function(e) {
+      e.preventDefault();
+      performAbsenceAction(absenceId, "validate");
+    };
+  }
+
+  showModal("authorizeAbsenceModal");
+}
+
+// Confirmer rejet d'absence
+export function confirmRejectAbsence(absenceId) {
+  const modal = document.getElementById("rejectAbsenceModal");
+  if (!modal) return;
+
+  const confirmRejectBtn = document.getElementById("confirmRejectAbsenceBtn");
+  const reasonInput = document.getElementById("rejectReason");
+
+  if (reasonInput) {
+    reasonInput.value = "";
+    reasonInput.focus();
+  }
+
+  if (confirmRejectBtn) {
+    confirmRejectBtn.disabled = true;
+    confirmRejectBtn.classList.add("opacity-50", "cursor-not-allowed");
+    confirmRejectBtn.classList.remove("hover:bg-red-700", "focus:ring-2", "focus:ring-red-500");
+  }
+
+  if (reasonInput && confirmRejectBtn) {
+    reasonInput.addEventListener("input", function() {
+      const motif = this.value.trim();
+      
+      if (motif.length >= 10) {
+        confirmRejectBtn.disabled = false;
+        confirmRejectBtn.classList.remove("opacity-50", "cursor-not-allowed");
+        confirmRejectBtn.classList.add("hover:bg-red-700", "focus:ring-2", "focus:ring-red-500");
+      } else {
+        confirmRejectBtn.disabled = true;
+        confirmRejectBtn.classList.add("opacity-50", "cursor-not-allowed");
+        confirmRejectBtn.classList.remove("hover:bg-red-700", "focus:ring-2", "focus:ring-red-500");
+      }
+    });
+
+    confirmRejectBtn.onclick = function(e) {
+      e.preventDefault();
+      
+      const motif = reasonInput.value.trim();
+      
+      if (motif.length < 10) {
+        alert("Le motif du rejet doit contenir au moins 10 caractères.");
+        reasonInput.focus();
+        return;
+      }
+
+      this.disabled = true;
+      this.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Traitement...';
+
+      performAbsenceAction(absenceId, "reject", motif);
+    };
+  }
+
+  showModal("rejectAbsenceModal");
+}
+
+// Exécuter une action sur une absence (autoriser/rejeter)
+function performAbsenceAction(absenceId, action, reason = null) {
+  const formData = new FormData();
+  formData.append("action", action);
+  formData.append("absence_id", absenceId);
+
+  if (action === "reject" && reason) {
+    formData.append("motif_rejet", reason);
+  }
+
+  console.log(`${action} absence ID:`, absenceId, reason ? ` | Motif: ${reason}` : "");
+
+  fetch("?page=absence_content", {
+    method: "POST",
+    body: formData,
+    credentials: "same-origin",
+    headers: {
+      "X-Requested-With": "XMLHttpRequest"
+    }
+  })
+    .then(response => {
+      console.log("Statut de réponse action:", response.status);
+
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP ! Statut : ${response.status}`);
+      }
+
+      return response.text().then(text => {
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          console.warn("Réponse non-JSON reçue:", text);
+          return { success: true, reload: true };
+        }
+      });
+    })
+    .then(data => {
+      console.log("Réponse serveur pour action:", data);
+
+      closeModal("authorizeAbsenceModal");
+      closeModal("rejectAbsenceModal");
+
+      const confirmRejectBtn = document.getElementById("confirmRejectAbsenceBtn");
+      if (confirmRejectBtn) {
+        confirmRejectBtn.disabled = true;
+        confirmRejectBtn.innerHTML = '<i class="fas fa-times mr-2"></i> Rejeter';
+        confirmRejectBtn.classList.add("opacity-50", "cursor-not-allowed");
+      }
+
+      if (data.success || data.reload) {
+        const message = action === "validate" 
+          ? "Absence autorisée avec succès" 
+          : "Absence rejetée avec succès";
+
+        if (data.updated_absence) {
+          updateLocalAbsenceData(data.updated_absence);
+        }
+
+        showMessageModal("Succès", [message], "success");
+
+        setTimeout(() => {
+          refreshAbsenceDisplay();
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        }, 500);
+      } else {
+        showMessageModal(
+          "Erreur",
+          data.messages?.errors || ["Une erreur s'est produite"],
+          "error"
+        );
+      }
+    })
+    .catch(error => {
+      console.error("Erreur lors de l'action:", error);
+      closeModal("authorizeAbsenceModal");
+      closeModal("rejectAbsenceModal");
+      
+      const confirmRejectBtn = document.getElementById("confirmRejectAbsenceBtn");
+      if (confirmRejectBtn) {
+        confirmRejectBtn.disabled = true;
+        confirmRejectBtn.innerHTML = '<i class="fas fa-times mr-2"></i> Rejeter';
+        confirmRejectBtn.classList.add("opacity-50", "cursor-not-allowed");
+      }
+      
+      showMessageModal("Erreur", ["Erreur lors de l'action : " + error.message], "error");
+    });
+}
+
+function updateLocalAbsenceData(updatedAbsence) {
+  console.log("Mise à jour des données locales pour l'absence:", updatedAbsence);
+  
+  const absenceIndex = absences.findIndex(absence => 
+    String(absence.id) === String(updatedAbsence.id)
+  );
+  
+  if (absenceIndex !== -1) {
+    absences[absenceIndex].statut = updatedAbsence.statut;
+    console.log(`Absence ID ${updatedAbsence.id} mise à jour localement:`, absences[absenceIndex]);
+  } else {
+    console.warn(`Absence ID ${updatedAbsence.id} non trouvée dans les données locales`);
+  }
+}
+
+// Afficher un modal
+export function showModal(modalId) {
+  const modal = document.getElementById(modalId);
+  if (!modal) {
+    console.error(`Modal ${modalId} non trouvé`);
+    return;
+  }
+
+  modal.classList.remove("hidden");
+  const modalContent = modal.querySelector("div[id$='Content']") || modal.querySelector("div.transform");
+  if (modalContent) {
+    setTimeout(() => {
+      modalContent.classList.remove("scale-95", "opacity-0");
+      modalContent.classList.add("scale-100", "opacity-100");
+    }, 10);
+  }
+  document.body.style.overflow = "hidden";
+}
+
+// Fermer un modal
 export function closeModal(modalId) {
   const modal = document.getElementById(modalId);
   if (!modal) return;
 
-  const modalContent = modal.querySelector("[id$='Content'], .bg-white");
+  const modalContent = modal.querySelector("div[id$='Content']") || modal.querySelector("div.transform");
+  
   if (modalContent) {
     modalContent.classList.remove("scale-100", "opacity-100");
     modalContent.classList.add("scale-95", "opacity-0");
-    setTimeout(() => modal.classList.add("hidden"), 300);
+    
+    setTimeout(() => {
+      modal.classList.add("hidden");
+      document.body.style.overflow = "auto";
+      
+      if (modalId === "rejectAbsenceModal") {
+        const reasonInput = document.getElementById("rejectReason");
+        const confirmBtn = document.getElementById("confirmRejectAbsenceBtn");
+        
+        if (reasonInput) {
+          reasonInput.value = "";
+        }
+        
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.innerHTML = '<i class="fas fa-times mr-2"></i> Rejeter';
+          confirmBtn.classList.add("opacity-50", "cursor-not-allowed");
+          confirmBtn.classList.remove("hover:bg-red-700", "focus:ring-2", "focus:ring-red-500");
+        }
+      }
+    }, 300);
   } else {
     modal.classList.add("hidden");
+    document.body.style.overflow = "auto";
   }
 
   eventBus.publish("modal:closed", { modalId });
 }
 
-export function confirmAuthorizeAbsence(absenceId) {
-  console.log("confirmAuthorizeAbsence appelée avec ID:", absenceId);
-  const modal = document.getElementById("authorizeAbsenceModal");
-  if (!modal) {
-    console.error("Modal authorizeAbsenceModal introuvable");
-    return;
+// Afficher le modal de messages
+function showMessageModal(title, messages, type) {
+  const messageModal = document.getElementById("messageAbsences");
+  const messageModalContent = document.getElementById("messageAbsencesModalContent");
+  if (!messageModal || !messageModalContent) return;
+
+  const modalTitle = messageModalContent.querySelector("h3 span");
+  const icon = messageModalContent.querySelector("h3 i");
+  const messageContainer = messageModalContent.querySelector(".p-4.sm\\:p-6");
+
+  if (modalTitle && icon && messageContainer) {
+    modalTitle.textContent = title;
+    icon.className = `fas fa-info-circle mr-2 ${type === "error" ? "text-red-500" : "text-green-600"}`;
+
+    messageContainer.innerHTML = messages.map(msg => `
+      <p class="${type === "error" ? "text-red-600" : "text-green-600"} font-semibold text-sm sm:text-base mb-2">
+        ${type === "error" ? "❌" : "✅"} ${msg}
+      </p>
+    `).join("") + `
+      <div class="flex justify-end mt-4">
+        <button type="button" class="close-modals px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all flex items-center">
+          <i class="fas fa-times mr-2"></i> Fermer
+        </button>
+      </div>
+    `;
   }
 
-  const absence = absences.find((a) => String(a.id) === String(absenceId));
-  if (!absence) {
-    alert("Absence introuvable pour autorisation.");
-    return;
-  }
-
-  const confirmBtn = document.getElementById("confirmAuthorizeAbsenceBtn");
-  if (confirmBtn) {
-    confirmBtn.href = `autoriser_absence.php?absence_id=${absenceId}`;
-  }
-
-  showModal("authorizeAbsenceModal");
-  eventBus.publish("absences:authorizeRequested", { absenceId });
+  showModal("messageAbsences");
 }
 
-export function confirmRejectAbsence(absenceId) {
-  console.log("confirmRejectAbsence appelée avec ID:", absenceId);
-  const modal = document.getElementById("rejectAbsenceModal");
-  if (!modal) {
-    console.error("Modal rejectAbsenceModal introuvable");
+// Configurer les filtres pour les absences 
+function setupFilters() {
+  const searchInput = document.getElementById("search");
+  const typeSelect = document.querySelector('#search_filter_types');  
+  const statutSelect = document.querySelector('#search_filter_statuts'); 
+
+  if (!searchInput || !typeSelect || !statutSelect) {
+    console.warn("Éléments nécessaires pour les filtres absences non trouvés");
     return;
   }
 
-  const absence = absences.find((a) => String(a.id) === String(absenceId));
-  if (!absence) {
-    alert("Absence introuvable pour rejet.");
-    return;
-  }
+  searchInput.addEventListener("input", filterAndDisplayAbsences);
+  typeSelect.addEventListener("change", filterAndDisplayAbsences);
+  statutSelect.addEventListener("change", filterAndDisplayAbsences);
 
-  const confirmBtn = document.getElementById("confirmRejectAbsenceBtn");
-  if (confirmBtn) {
-    confirmBtn.href = `refuser_absence.php?absence_id=${absenceId}`;
-  }
+  function filterAndDisplayAbsences() {
+    const searchQuery = searchInput.value.trim().toLowerCase();
+    const typeFilter = typeSelect.value;
+    const statutFilter = statutSelect.value;
 
-  showModal("rejectAbsenceModal");
-  eventBus.publish("absences:rejectRequested", { absenceId });
+    console.log("Filtres appliqués:", { searchQuery, typeFilter, statutFilter });
+
+    const filteredAbsences = absences.filter((absence) => {
+      const nomPrenom = (absence.nom_prenom || "").toLowerCase();
+      const motif = (absence.motif || "").toLowerCase();
+      const statut = (absence.statut || "").toLowerCase();
+      
+      const typeAbsence = typesAbsences.find(t => t.libelle === absence.motif);
+      const typeId = typeAbsence ? String(typeAbsence.id) : "";
+      
+      const statutAbsence = statutsAbsences.find(s => s.libelle.toLowerCase() === statut);
+      const statutId = statutAbsence ? String(statutAbsence.id) : "";
+
+      const matchesSearch = nomPrenom.includes(searchQuery) || motif.includes(searchQuery);
+      const matchesType = typeFilter === "" || typeId === String(typeFilter);
+      const matchesStatut = statutFilter === "" || statutId === String(statutFilter);
+
+      return matchesSearch && matchesType && matchesStatut;
+    });
+
+    console.log("Absences filtrées:", filteredAbsences.length);
+
+    updateCardsDisplay(filteredAbsences);
+    updateTableDisplay(filteredAbsences);
+  }
 }
 
-// CORRECTION 4: Amélioration de la génération des boutons avec les bonnes classes
-function generateActionButtons(absence, role) {
+// Mettre à jour l'affichage des cartes
+function updateCardsDisplay(filteredAbsences) {
+  const cardsContainer = document.getElementById("absencesCards");
+  if (!cardsContainer) return;
+
+  if (filteredAbsences.length === 0) {
+    cardsContainer.innerHTML = `
+      <div class="col-span-full flex flex-col items-center justify-center p-6 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl shadow-sm">
+        <i class="fas fa-search text-4xl text-indigo-500 mb-4"></i>
+        <h3 class="text-lg font-semibold text-gray-800 mb-2">Aucune absence trouvée</h3>
+        <p class="text-sm text-gray-600">Essayez une autre recherche.</p>
+      </div>
+    `;
+  } else {
+    cardsContainer.innerHTML = filteredAbsences.map(absence => {
+      const statut = (absence.statut || "").toLowerCase();
+      return `
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all duration-300">
+          <div class="p-4">
+            <div class="flex items-center mb-4">
+              <div class="h-12 w-12 rounded-full flex items-center justify-center mr-3 border-2 shadow-sm">
+                ${absence.photo && absence.photo !== "NULL" && absence.photo !== ""
+                  ? `<img src="${absence.photo}" alt="${absence.nom_prenom || 'Agent'}" class="w-12 h-12 rounded-full object-cover">`
+                  : getInitialsCircle(absence.nom_prenom || "")
+                }
+              </div>
+              <div>
+                <h3 class="font-semibold text-base sm:text-lg text-gray-800">
+                  ${absence.nom_prenom || "Nom inconnu"}
+                </h3>
+              </div>
+            </div>
+
+            <div class="text-sm text-gray-600 space-y-1 mb-4">
+              <div><i class="fas fa-traffic-light mr-2"></i><strong>Statut :</strong> 
+                ${statut === 'autoriser' 
+                  ? '<span class="text-green-600">✔️ Autorisé</span>'
+                  : statut === 'rejeter' || statut === 'rejeté'
+                  ? '<span class="text-red-600">❌ Rejeté</span>'
+                  : statut === 'en attente'
+                  ? '<span class="text-gray-600">⏳ En attente</span>'
+                  : '<span class="text-gray-500">Inconnu</span>'
+                }
+              </div>
+              <div><i class="fas fa-calendar-alt mr-2"></i><strong>Début :</strong> ${absence.debut || absence.date_debut || "Non défini"}</div>
+              <div><i class="fas fa-calendar-check mr-2"></i><strong>Fin :</strong> ${absence.fin || absence.date_fin || "Non défini"}</div>
+              <div><i class="fas fa-suitcase-rolling mr-2"></i><strong>Type :</strong> ${absence.motif || "Non défini"}</div>
+              <div><i class="fas fa-file-alt mr-2"></i><strong>Justificatif :</strong> ${generateJustificatifDisplay(absence.justificatif)}</div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+              ${generateActionButtons(absence, roleUtilisateur)}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+}
+
+// Mettre à jour l'affichage du tableau
+function updateTableDisplay(filteredAbsences) {
+  const tableBody = document.querySelector("#absencesTable tbody");
+  if (!tableBody) return;
+
+  if (filteredAbsences.length === 0) {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="px-4 py-6 text-center">
+          <div class="flex flex-col items-center justify-center p-6 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl shadow-sm">
+            <i class="fas fa-search text-4xl text-indigo-500 mb-4"></i>
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">Aucune absence trouvée</h3>
+            <p class="text-sm text-gray-600">Essayez une autre recherche.</p>
+          </div>
+        </td>
+      </tr>
+    `;
+  } else {
+    tableBody.innerHTML = filteredAbsences.map(absence => `
+      <tr class="hover:bg-gray-50 transition-colors">
+        <td class="px-4 py-3 whitespace-nowrap">
+          <div class="flex items-center">
+            <div class="h-10 w-10 rounded-full flex items-center justify-center mr-3 border">
+              ${absence.photo && absence.photo !== "NULL" && absence.photo !== ""
+                ? `<img src="${absence.photo}" alt="${absence.nom_prenom || 'Agent'}" class="w-10 h-10 rounded-full object-cover">`
+                : getInitialsCircle(absence.nom_prenom || "")
+              }
+            </div>
+            <div>
+              <div class="text-sm font-medium text-black">${absence.nom_prenom || "Nom inconnu"}</div>
+            </div>
+          </div>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap text-sm text-black">${absence.debut || absence.date_debut || "Non défini"}</td>
+        <td class="px-4 py-3 whitespace-nowrap text-sm text-black">${absence.fin || absence.date_fin || "Non défini"}</td>
+        <td class="px-4 py-3 whitespace-nowrap text-sm text-black">${absence.motif || "Non défini"}</td>
+        <td class="px-4 py-3 whitespace-nowrap text-sm text-black text-center">
+          ${generateJustificatifDisplay(absence.justificatif)}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
+          ${generateStatusIcon(absence.statut)}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+          <div class="flex space-x-2 justify-end">
+            ${generateActionButtons(absence, roleUtilisateur)}
+          </div>
+        </td>
+      </tr>
+    `).join("");
+  }
+}
+
+// Générer les icônes de statut
+function generateStatusIcon(statut) {
+  const statutLower = (statut || "").toLowerCase().trim();
+  console.log("Génération icône pour statut:", statutLower);
+  
+  if (statutLower === 'autoriser' || statutLower === 'autorisé') {
+    return '<span title="Autorisé" style="color:green; font-size: 18px;">✔️</span>';
+  } else if (statutLower === 'rejeter' || statutLower === 'rejeté' || statutLower === 'refusé') {
+    return '<span title="Rejeté" style="color:red; font-size:18px;">❌</span>';
+  } else if (statutLower === 'en attente') {
+    return '<span title="En attente" style="color:gray; font-size:18px;">⏳</span>';
+  } else {
+    return '<i class="fas fa-question-circle text-gray-400" title="Inconnu"></i>';
+  }
+}
+
+// Générer les boutons d'action selon le rôle
+function generateActionButtons(absence, roleUtilisateur) {
+  const statut = (absence.statut || "").toLowerCase();
   let buttons = "";
-  const statutLibelle = getStatutLibelle(absence.statut).toLowerCase();
 
-  if (role === "secretaire") {
-    if (statutLibelle === "autoriser") {
-      buttons += `
-        <form action="generer_autorisation.php" method="post" target="_blank" class="inline-block">
+  if (roleUtilisateur === 'secretaire') {
+    if (statut === 'autoriser') {
+      buttons = `
+        <form action="generer_autorisation.php" method="post" target="_blank" style="display: inline;">
           <input type="hidden" name="absence_id" value="${absence.id}">
-          <button type="submit" class="text-green-600 hover:text-green-800 text-sm" title="Imprimer l'autorisation">
-            <i class="fas fa-print mr-1"></i> 
+          <button type="submit" class="text-blue-600 hover:text-blue-800" title="Imprimer l'autorisation">
+            <i class="fas fa-print"></i>
           </button>
         </form>
       `;
-    } else {
-      buttons += `
-        <button class="edit-absence-btn text-blue-600 hover:text-blue-900 text-sm" data-id="${absence.id}" title="Modifier">
-          <i class="fas fa-edit mr-1"></i>
+    }
+    else if (statut === "rejeter" || statut === "rejeté" || statut === "refusé") {
+      buttons = `
+        <form action="generer_refus.php" method="post" target="_blank" style="display: inline;">
+          <input type="hidden" name="absence_id" value="${absence.id}">
+          <button type="submit" class="text-blue-600 hover:text-blue-800" title="Imprimer le refus">
+            <i class="fas fa-print"></i>
+          </button>
+        </form>
+      `;
+    }
+    else {
+      buttons = `
+        <button class="edit-absence-btn text-blue-600 hover:text-blue-800" data-id="${absence.id}" title="Modifier">
+          <i class="fas fa-edit"></i>
         </button>
-        <button class="delete-absence-btn text-red-600 hover:text-red-900 text-sm" data-id="${absence.id}" title="Supprimer">
-          <i class="fas fa-trash mr-1"></i> 
+        <button class="delete-absence-btn text-red-600 hover:text-red-900" data-id="${absence.id}" title="Supprimer">
+          <i class="fas fa-trash"></i>
         </button>
       `;
     }
-  } 
-  else if (role === "chef de service" || role === "directrice") {
-    if (statutLibelle === "en attente") {
-      buttons += `
-        <button class="validate-absence-btn text-green-600 hover:text-green-800 text-sm" data-id="${absence.id}" title="Autoriser">
-          <i class="fas fa-check-circle mr-1"></i> 
+  } else if (roleUtilisateur === 'chef de service' || roleUtilisateur === 'directrice') {
+    if (statut === 'en attente') {
+      buttons = `
+        <button class="validate-absence-btn text-green-600 hover:text-green-800" data-id="${absence.id}" title="Autoriser">
+          <i class="fas fa-check-circle"></i>
         </button>
-        <button class="reject-absence-btn text-red-600 hover:text-red-800 text-sm" data-id="${absence.id}" title="Rejeter">
-          <i class="fas fa-times-circle mr-1"></i>
+        <button class="reject-absence-btn text-red-600 hover:text-red-800" data-id="${absence.id}" title="Rejeter">
+          <i class="fas fa-times-circle"></i>
         </button>
       `;
-    } else if (statutLibelle === "autoriser") {
-      buttons += `
-        <span class="text-green-600 text-sm italic">
-           Déjà autorisé
-        </span>
-      `;
-    } else if (statutLibelle === "rejeter") {
-      buttons += `
-        <span class="text-red-600 text-sm italic">
-          <i class="fas fa-times-circle mr-1"></i> Déjà rejeté
-        </span>
-      `;
+    } else if (statut === 'autoriser') {
+      buttons = '<span class="text-green-600 text-sm italic"> Déjà autorisé</span>';
+    } else if (statut === 'rejeter' || statut === 'rejeté') {
+      buttons = '<span class="text-red-600 text-sm italic">Déjà rejeté</span>';
     }
   }
 
   return buttons;
 }
 
-function setupFiltersAbsences() {
+// Rafraîchir l'affichage
+function refreshAbsenceDisplay() {
   const searchInput = document.getElementById("search");
-  const typesSelect = document.getElementById("filter_types");
-  const statutsSelect = document.getElementById("filter_statuts");
-  const absencesCardsContainer = document.getElementById("absencesCards");
-  const absencesTableBody = document.querySelector("#absencesTable tbody");
-
-  if (!searchInput || !typesSelect || !statutsSelect || !absencesCardsContainer || !absencesTableBody) {
-    console.warn("Éléments nécessaires pour les filtres d'absences non trouvés");
-    return;
+  if (searchInput) {
+    searchInput.dispatchEvent(new Event("input"));
   }
-
-  searchInput.addEventListener("input", filterAndDisplayAbsences);
-  typesSelect.addEventListener("change", filterAndDisplayAbsences);
-  statutsSelect.addEventListener("change", filterAndDisplayAbsences);
-
-  function filterAndDisplayAbsences() {
-    const searchQuery = (searchInput.value || "").trim().toLowerCase().replace(/[<>]/g, "");
-    const typeFilter = typesSelect.value;
-    const statutFilter = statutsSelect.value;
-
-    console.log("Filtres appliqués:", { searchQuery, typeFilter, statutFilter });
-
-    const filteredAbsences = absences.filter(absence => {
-      const nomPrenom = absence.nom_prenom ? absence.nom_prenom.toLowerCase() : "";
-      const matchesSearch = searchQuery === "" || nomPrenom.includes(searchQuery);
-
-      // CORRECTION 1: Comparer avec le libellé du motif au lieu de l'ID
-      let matchesType = true;
-      if (typeFilter !== "") {
-        const typeLibelle = getTypeAbsenceLibelle(typeFilter);
-        matchesType = absence.motif && absence.motif.toLowerCase() === typeLibelle.toLowerCase();
-      }
-
-      // CORRECTION 2: Comparer avec le libellé du statut au lieu de l'ID
-      let matchesStatut = true;
-      if (statutFilter !== "") {
-        const statutLibelle = statuts.find(s => String(s.id) === String(statutFilter));
-        if (statutLibelle) {
-          const absenceStatutLibelle = getStatutLibelle(absence.statut);
-          matchesStatut = absenceStatutLibelle.toLowerCase() === statutLibelle.libelle.toLowerCase();
-        }
-      }
-
-      console.log("Filtrage absence:", {
-        nom: absence.nom_prenom,
-        motif: absence.motif,
-        statut: absence.statut,
-        matchesSearch,
-        matchesType,
-        matchesStatut
-      });
-
-      return matchesSearch && matchesType && matchesStatut;
-    });
-
-    console.log(`${filteredAbsences.length} absences trouvées après filtrage`);
-
-    // Mise à jour des cartes (mobile)
-    absencesCardsContainer.innerHTML = filteredAbsences.length === 0 
-      ? `<div class="col-span-full flex flex-col items-center justify-center p-6 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl shadow-sm">
-           <i class="fas fa-search text-4xl text-indigo-500 mb-4"></i>
-           <h3 class="text-lg font-semibold text-gray-800 mb-2">Aucune absence trouvée</h3>
-           <p class="text-sm text-gray-600">Essayez une autre recherche ou un autre filtre.</p>
-         </div>`
-      : filteredAbsences.map(absence => `
-          <div class="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-all duration-300">
-            <div class="p-4">
-              <div class="flex items-center mb-4">
-                <div class="h-12 w-12 rounded-full flex items-center justify-center mr-3 border-2 shadow-sm">
-                  ${absence.photo && absence.photo !== "NULL" && absence.photo !== ""
-                    ? `<img src="${absence.photo}" alt="Photo de ${absence.nom_prenom || "Agent"}" class="rounded-full object-cover w-12 h-12" onerror="this.parentNode.innerHTML = '${getInitialsCircle(absence.nom_prenom || "").replace(/'/g, "\\'")}'"/>`
-                    : getInitialsCircle(absence.nom_prenom || "")
-                  }
-                </div>
-                <div>
-                  <h3 class="font-semibold text-base sm:text-lg text-gray-800">${absence.nom_prenom || "Nom inconnu"}</h3>
-                </div>
-              </div>
-              <div class="text-sm text-gray-600 space-y-1 mb-4">
-                <div><i class="fas fa-traffic-light mr-2"></i><strong>Statut :</strong> 
-                  ${getStatutDisplayIcon(getStatutLibelle(absence.statut))}
-                </div>
-                <div><i class="fas fa-calendar-alt mr-2"></i><strong>Début :</strong> ${absence.debut || "Non défini"}</div>
-                <div><i class="fas fa-calendar-check mr-2"></i><strong>Fin :</strong> ${absence.fin || "Non défini"}</div>
-                <div><i class="fas fa-suitcase-rolling mr-2"></i><strong>Type :</strong> ${absence.motif || "Non défini"}</div>
-                <div><i class="fas fa-file-alt mr-2"></i><strong>Justificatif :</strong> ${absence.justificatif || "Non défini"}</div>
-              </div>
-              <div class="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
-                ${generateActionButtons(absence, roleUtilisateur)}
-              </div>
-            </div>
-          </div>
-        `).join("");
-
-    // Mise à jour du tableau (desktop)
-    if (filteredAbsences.length === 0) {
-      absencesTableBody.innerHTML = `
-        <tr>
-          <td colspan="7" class="px-4 py-6 text-center">
-            <div class="flex flex-col items-center justify-center p-6 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl shadow-sm">
-              <i class="fas fa-search text-4xl text-indigo-500 mb-4"></i>
-              <h3 class="text-lg font-semibold text-gray-800 mb-2">Aucune absence trouvée</h3>
-              <p class="text-sm text-gray-600">Essayez une autre recherche ou un autre filtre.</p>
-            </div>
-          </td>
-        </tr>
-      `;
-    } else {
-      absencesTableBody.innerHTML = filteredAbsences.map(absence => `
-        <tr class="hover:bg-gray-50 transition-colors">
-          <td class="px-4 py-3 whitespace-nowrap">
-            <div class="flex items-center">
-              <div class="h-10 w-10 rounded-full flex items-center justify-center mr-3 border">
-                ${absence.photo && absence.photo !== "NULL" && absence.photo !== ""
-                  ? `<img src="${absence.photo}" alt="Photo de ${absence.nom_prenom || "Agent"}" class="rounded-full object-cover w-10 h-10" onerror="this.parentNode.innerHTML = '${getInitialsCircle(absence.nom_prenom || "").replace(/'/g, "\\'")}'"/>`
-                  : getInitialsCircle(absence.nom_prenom || "")
-                }
-              </div>
-              <div>
-                <div class="text-sm font-medium text-gray-900">${absence.nom_prenom || "Nom inconnu"}</div>
-              </div>
-            </div>
-          </td>
-          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${absence.debut || "Non défini"}</td>
-          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${absence.fin || "Non défini"}</td>
-          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${absence.motif || "Non défini"}</td>
-          <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${absence.justificatif || "Non défini"}</td>
-          <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
-            ${getStatutDisplayIcon(getStatutLibelle(absence.statut))}
-          </td>
-          <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-            <div class="flex space-x-2 justify-end">
-              ${generateActionButtons(absence, roleUtilisateur)}
-            </div>
-          </td>
-        </tr>
-      `).join("");
-    }
-  }
-
-  // Appel initial pour afficher toutes les absences
-  filterAndDisplayAbsences();
 }
 
-  
-/**
- * Fonction utilitaire pour afficher l'icône du statut
- */
-function getStatutDisplayIcon(statutLibelle) {
-  const statut = statutLibelle.toLowerCase();
-  if (statut === 'autoriser') {
-    return '<span class="text-green-600">✔️</span>';
-  } else if (statut === 'rejeter') {
-    return '<span class="text-red-600">❌</span>';
-  } else if (statut === 'en attente') {
-    return '<span class="text-yellow-600">⏳</span>';
-  } 
-}
-
-
+// S'abonner aux événements externes
+eventBus.subscribe("absences:externalUpdate", (data) => {
+  console.log("Mise à jour externe des absences reçue", data);
+  loadAbsencesData();
+  loadAgentsData();
+  refreshAbsenceDisplay();
+});
