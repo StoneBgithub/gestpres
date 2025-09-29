@@ -7,22 +7,32 @@ if (session_status() === PHP_SESSION_NONE) {
 // Inclure la connexion à la base de données
 require_once "db_connect.php";
 
+// Configuration pour upload de fichiers
+define('UPLOAD_MAX_SIZE', 5 * 1024 * 1024); // 5MB
+define('ALLOWED_EXTENSIONS', ['jpg', 'jpeg', 'png', 'pdf']);
+define('ALLOWED_MIME_TYPES', ['image/jpeg', 'image/png', 'application/pdf']);
+
 // Récupérer le paramètre de recherche
 $search = filter_input(INPUT_GET, 'search', FILTER_SANITIZE_STRING) ?? '';
 
 // Vérifier si l'utilisateur est connecté
 $agent_conn = $_SESSION['user_id'] ?? null;
 $messages = ['success' => [], 'errors' => []];
+
 if (!$agent_conn) {
     header("Location: login.php");  
     exit();
 }
+
 $absences = [];
+$login_id = null;
+
 // Vérifier si l'utilisateur connecté a un login.id valide
 try {
     $stmt31 = $pdo->prepare("SELECT id FROM login WHERE agent_id = :agent_id");
     $stmt31->execute(['agent_id' => $agent_conn]);
     $login_id = $stmt31->fetchColumn();
+    
     if (!$login_id) {
         $messages['errors'][] = "Erreur : Aucun compte de connexion trouvé pour l'utilisateur connecté.";
     }
@@ -31,25 +41,27 @@ try {
     $messages['errors'][] = "Erreur lors de la vérification du compte.";
 }
 
-
 // Récupérer les types d'absences
+$types_absences = [];
 try {
-    $stmt51 = $pdo->query("SELECT id, libelle FROM type_absence");
+    $stmt51 = $pdo->query("SELECT id, libelle FROM type_absence ORDER BY libelle");
     $types_absences = $stmt51->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log("Erreur dans absence_content.php (récupération types d'absence) : " . $e->getMessage());
     $messages['errors'][] = "Erreur de connexion à la base de données.";
 }
 
-
 // Récupérer les statuts des absences
+$statuts = [];
 try {
-    $stmt61 = $pdo->query("SELECT id, libelle FROM statut_absence");
+    $stmt61 = $pdo->query("SELECT id, libelle FROM statut_absence ORDER BY libelle");
     $statuts = $stmt61->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     error_log("Erreur dans absence_content.php (récupération statuts) : " . $e->getMessage());
     $messages['errors'][] = "Erreur de connexion à la base de données.";
 }
+
+// Récupérer le rôle de l'utilisateur connecté
 $role_utilisateur = null;
 try {
     $stmtRole = $pdo->prepare("
@@ -65,211 +77,707 @@ try {
     $messages['errors'][] = "Erreur interne (rôle utilisateur).";
 }
 
-// Gestion des requêtes POST (ajout ou modification)
-// Gestion des requêtes POST (ajout ou modification)
-if ($_SERVER["REQUEST_METHOD"] === "POST" && $role_utilisateur === 'secretaire' && empty($messages['errors'])) {
-    $action = $_POST['action'] ?? 'add';
-    $absence_id = isset($_POST['absence_id']) ? (int)$_POST['absence_id'] : null;
-    $agent_id = $_POST['agent_id'] ?? null;
-    $id_type_absence = $_POST['motif'] ?? null;
-    $date_debut = $_POST['date_debut'] ?? null;
-    $date_fin = $_POST['date_fin'] ?? null;
-    $description = trim($_POST['description'] ?? '');
-    $cree_par = $_SESSION['user_id'] ?? null;
-    $justificatif_path = null;
-    $hasNewJustificatif = false;
-
-    // Validation du justificatif
-    if (isset($_FILES['justificatif']) && $_FILES['justificatif']['error'] === UPLOAD_ERR_OK) {
-        $tmpName = $_FILES['justificatif']['tmp_name'];
-        $original = basename($_FILES['justificatif']['name']);
-        $cleanName = preg_replace("/[^a-zA-Z0-9_\-\.]/", "_", $original);
-        $fileName = uniqid() . '_' . $cleanName;
-
-        $uploadDir = "justificatifs/";
-        if (!is_dir($uploadDir)) {
-            mkdir($uploadDir, 0777, true);
-        }
-
-        $justificatif_path = $uploadDir . $fileName;
-        if (move_uploaded_file($tmpName, $justificatif_path)) {
-            $hasNewJustificatif = true;
-        } else {
-            $messages['errors'][] = "Erreur lors du téléchargement du justificatif.";
-        }
-    }
-
-    // Validation des champs requis
-    if (!$agent_id || !$id_type_absence || !$date_debut || !$date_fin) {
-        $messages['errors'][] = "Tous les champs obligatoires doivent être remplis.";
-    }
-
-    // Calcul de la durée + validation rôle autorisation
-    if ($date_debut && $date_fin) {
-        $d1 = new DateTime($date_debut);
-        $d2 = new DateTime($date_fin);
-
-        if ($d1 > $d2) {
-            $messages['errors'][] = "La date de début ne peut pas être postérieure à la date de fin.";
-        } else {
-            $duree_jours = $d1->diff($d2)->days + 1;
-            $libelle_role = ($duree_jours > 15) ? 'directrice' : 'chef de service';
-
-            $stmtRole = $pdo->prepare("SELECT id FROM role WHERE libelle = :libelle");
-            $stmtRole->execute(['libelle' => $libelle_role]);
-            $role_id = $stmtRole->fetchColumn();
-
-            if ($role_id) {
-                $stmtLogin = $pdo->prepare("SELECT id FROM login WHERE role_id = :role_id AND statut = 'activé' LIMIT 1");
-                $stmtLogin->execute(['role_id' => $role_id]);
-                $autorisation_par = $stmtLogin->fetchColumn();
-                if (!$autorisation_par) {
-                    $messages['errors'][] = "Aucun utilisateur actif trouvé pour le rôle : $libelle_role.";
-                }
-            } else {
-                $messages['errors'][] = "Le rôle '$libelle_role' n'existe pas.";
-            }
-        }
-    }
-
-    // Statut d’attente
-    if (empty($messages['errors'])) {
-        $stmtStatut = $pdo->prepare("SELECT id FROM statut_absence WHERE libelle = 'en attente' LIMIT 1");
-        $stmtStatut->execute();
-        $id_statut = $stmtStatut->fetchColumn();
-
-        if (!$id_statut) {
-            $messages['errors'][] = "Le statut 'en attente' est introuvable.";
-        }
-    }
-
-    // Traitement selon l'action
-    if (empty($messages['errors'])) {
-        try {
-            if ($action === 'add' && !$absence_id) {
-                $stmt = $pdo->prepare("
-                    INSERT INTO absence (agent_id, date_debut, date_fin, id_type_absence, justificatif, id_statut, description)
-                    VALUES (:agent_id, :date_debut, :date_fin, :id_type_absence, :justificatif, :id_statut, :description)
-                ");
-                $stmt->execute([
-                    'agent_id' => $agent_id,
-                    'date_debut' => $date_debut,
-                    'date_fin' => $date_fin,
-                    'id_type_absence' => $id_type_absence,
-                    'justificatif' => $justificatif_path,
-                    'id_statut' => $id_statut,
-                    'description' => $description
-                ]);
-                $messages['success'][] = "Absence ajoutée avec succès.";
-            }
-
-            if ($action === 'update' && $absence_id) {
-                $stmt = $pdo->prepare("
-                    UPDATE absence SET
-                        agent_id = :agent_id,
-                        date_debut = :date_debut,
-                        date_fin = :date_fin,
-                        id_type_absence = :id_type_absence,
-                        justificatif = :justificatif,
-                        description = :description
-                    WHERE id = :id
-                ");
-                $stmt->execute([
-                    'agent_id' => $agent_id,
-                    'date_debut' => $date_debut,
-                    'date_fin' => $date_fin,
-                    'id_type_absence' => $id_type_absence,
-                    'justificatif' => $justificatif_path,
-                    'description' => $description,
-                    'id' => $absence_id
-                ]);
-                $messages['success'][] = "Absence modifiée avec succès.";
-            }
-        } catch (PDOException $e) {
-            error_log("Erreur PDO : " . $e->getMessage());
-            $messages['errors'][] = "Erreur lors de l'enregistrement dans la base.";
-        }
-    }
+// Récupérer les bureaux
+try {
+    $sql = "SELECT libele FROM bureau";
+    $stmt = $pdo->query($sql);
+    $bureaux2 = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log("Erreur dans compte_content.php (récupération bureaux) : " . $e->getMessage());
+    $bureaux2 = [];
 }
 
-                  
-// Suppression d’un agent
-if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id']) && empty($messages['errors'])) {
-    $id = (int)$_GET['id'];
+// Récupérer agents avec leurs bureaux
+try {
+    $sql = "SELECT a.id, a.bureau_id, CONCAT(a.nom, ' ', a.prenom) AS nom_prenom, a.email, b.libele AS bureau
+            FROM agent a
+            JOIN bureau b ON a.bureau_id = b.id
+            LEFT JOIN login l ON a.id = l.agent_id
+            WHERE l.agent_id IS NULL";
+    $stmt = $pdo->query($sql);
+    $agents_bureau = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    error_log("Erreur dans compte_content.php (récupération agents bureau) : " . $e->getMessage());
+    $agents_bureau = [];
+}
 
+/**
+ * Fonction pour sécuriser l'upload de fichier
+ */
+function secureFileUpload($file) {
+    if (!isset($file) || $file['error'] !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'error' => 'Aucun fichier uploadé ou erreur durant l\'upload'];
+    }
+    
+    // Vérifier la taille
+    if ($file['size'] > UPLOAD_MAX_SIZE) {
+        return ['success' => false, 'error' => 'Fichier trop volumineux (max 5MB)'];
+    }
+    
+    // Vérifier l'extension
+    $pathInfo = pathinfo($file['name']);
+    $extension = strtolower($pathInfo['extension'] ?? '');
+    
+    if (!in_array($extension, ALLOWED_EXTENSIONS)) {
+        return ['success' => false, 'error' => 'Type de fichier non autorisé'];
+    }
+    
+    // Vérifier le type MIME réel
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mimeType = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    if (!in_array($mimeType, ALLOWED_MIME_TYPES)) {
+        return ['success' => false, 'error' => 'Type de fichier non autorisé (MIME)'];
+    }
+    
+    // Créer le nom de fichier sécurisé
+    $fileName = uniqid() . '_' . preg_replace("/[^a-zA-Z0-9_\-\.]/", "_", $pathInfo['filename']) . '.' . $extension;
+    
+    $uploadDir = "justificatifs/";
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
+    
+    $filePath = $uploadDir . $fileName;
+    
+    if (move_uploaded_file($file['tmp_name'], $filePath)) {
+        return ['success' => true, 'path' => $filePath];
+    }
+    
+    return ['success' => false, 'error' => 'Erreur lors de l\'enregistrement du fichier'];
+}
+
+/**
+ * Fonction pour déterminer qui doit autoriser une absence
+ */
+function getAutorisationInfo($pdo, $duree_jours) {
+    $libelle_role = ($duree_jours > 15) ? 'directrice' : 'chef de service';
+    
     try {
-        // Récupérer les informations de l'agent avant suppression
-        $stmt = $pdo->prepare("
-            SELECT agent_id, date_debut, date_fin, id_type_absence, justificatif, id_statut,description,validation 
-            FROM absence
-            WHERE id = :id 
-        ");
-        $stmt->execute(['id' => $id]);
-        $absence = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if ($absence) {
-             // Récupérer le libellé du statut
-            $stmt_agent = $pdo->prepare("SELECT concat (nom, ' ' , prenom) FROM agent WHERE id = :id");
-            $stmt_agent->execute(['id' => $absence['agent_id']]);
-            $libele_agent = $stmt_agent->fetchColumn() ?: 'N/A';
-
-            // Récupérer le libellé du statut
-            $stmt_statut = $pdo->prepare("SELECT libelle FROM statut_absence WHERE id = :id");
-            $stmt_statut->execute(['id' => $absence['statut']]);
-            $libele_statut = $stmt_statut->fetchColumn() ?: 'N/A';
-
-             // Récupérer le libellé du motif
-            $stmt_type = $pdo->prepare("SELECT libelle FROM type_absence WHERE id = :id");
-            $stmt_type->execute(['id' => $type['motif']]);
-            $libele_type = $stmt_type->fetchColumn() ?: 'N/A';
-
-
-            // Supprimer l'enregistrement de l'absence
-            $stmt48 = $pdo->prepare("DELETE FROM absence WHERE id = :id");
-            $stmt48->execute(['id' => $id]);
-
-            // Supprimer la photo si elle existe
-            if (!empty($absence['justificatif']) && file_exists($absence['justificatif'])) {
-                unlink($bsence['justificatif']);
-            }
-
-            $messages['success'][] = "absence supprimé avec succès.";
-
-            // Journalisation
-            if ($login_id) {
-                $donnees = json_encode([
-                    'agent_id' =>  $libele_agent,
-                    ' date_debut' => $absence['date_debut'],
-                    ' date_fin' => $absence['date_fin'],
-                    'id_type_absence' => $libele_motif,
-                    'justificatif' => $absence['justificatif'],
-                    'id_statut' => $libele_satut,
-                    'description' => $absence['description']
-                ], JSON_UNESCAPED_UNICODE);
-                $date_action = date('Y-m-d H:i:s');
-                $action_type = 'supprimer';
-
-                $stmt = $pdo->prepare("
-                    INSERT INTO journal_actions (ag_id, action_type, donnees, date_action)
-                    VALUES (:ag_id, :action_type, :donnees, :date_action)
-                ");
-                $stmt->execute([
-                    ':ag_id' => $login_id,
-                    ':action_type' => $action_type,
-                    ':donnees' => $donnees,
-                    ':date_action' => $date_action,
-                ]);
-            }
-        } else {
-            $messages['errors'][] = "Erreur : Agent introuvable.";
+        $stmtRole = $pdo->prepare("SELECT id FROM role WHERE LOWER(libelle) = LOWER(:libelle)");
+        $stmtRole->execute(['libelle' => $libelle_role]);
+        $role_id = $stmtRole->fetchColumn();
+        
+        if ($role_id) {
+            $stmtLogin = $pdo->prepare("SELECT id FROM login WHERE role_id = :role_id AND statut = 'activé' LIMIT 1");
+            $stmtLogin->execute(['role_id' => $role_id]);
+            $autorisation_par = $stmtLogin->fetchColumn();
+            
+            return [
+                'success' => (bool)$autorisation_par,
+                'autorisation_par' => $autorisation_par,
+                'role_requis' => $libelle_role
+            ];
         }
     } catch (PDOException $e) {
-        error_log("Erreur dans absence_content.php (suppression) : " . $e->getMessage());
-        $messages['errors'][] = "Erreur lors de la suppression.";
+        error_log("Erreur getAutorisationInfo : " . $e->getMessage());
+    }
+    
+    return ['success' => false, 'error' => "Le rôle '$libelle_role' n'existe pas ou aucun utilisateur actif"];
+}
+
+/**
+ * Fonction de debug pour vérifier les statuts
+ */
+function debugStatutsAbsence($pdo) {
+    try {
+        $stmt = $pdo->query("SELECT id, libelle FROM statut_absence ORDER BY id");
+        $statuts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        error_log("=== DEBUG STATUTS ABSENCE ===");
+        foreach ($statuts as $statut) {
+            error_log("ID: " . $statut['id'] . " - Libellé: '" . $statut['libelle'] . "' - Trimmed: '" . trim($statut['libelle']) . "' - Lower: '" . strtolower(trim($statut['libelle'])) . "'");
+        }
+        error_log("=== FIN DEBUG STATUTS ===");
+        
+        return $statuts;
+    } catch (PDOException $e) {
+        error_log("Erreur debug statuts: " . $e->getMessage());
+        return [];
     }
 }
 
-// Construction de la requête principale
+// Décommenter pour diagnostiquer les statuts
+// debugStatutsAbsence($pdo);
+
+// Gestion des requêtes POST
+if ($_SERVER["REQUEST_METHOD"] === "POST" && empty($messages['errors'])) {
+    $action = $_POST['action'] ?? '';
+    
+    switch ($action) {
+        case 'add':
+        case 'update':
+            // Vérifier les permissions pour ajout/modification
+            if ($role_utilisateur !== 'secretaire') {
+                $messages['errors'][] = "Vous n'avez pas les permissions pour cette action.";
+                break;
+            }
+            
+            $absence_id = isset($_POST['absence_id']) ? (int)$_POST['absence_id'] : null;
+            $agent_id = $_POST['agent_id'] ?? null;
+            $id_type_absence = $_POST['motif'] ?? null;
+            $date_debut = $_POST['date_debut'] ?? null;
+            $date_fin = $_POST['date_fin'] ?? null;
+            $description = $_POST['description'] ?? '';
+            $justificatif_path = null;
+            
+            // CORRECTION: Validation améliorée des champs requis
+            $validation_errors = [];
+            
+            if (empty($agent_id)) {
+                $validation_errors[] = "L'agent doit être sélectionné.";
+            }
+            
+            if (empty($id_type_absence)) {
+                $validation_errors[] = "Le motif d'absence doit être sélectionné.";
+            }
+            
+            if (empty($date_debut)) {
+                $validation_errors[] = "La date de début est requise.";
+            }
+            
+            if (empty($date_fin)) {
+                $validation_errors[] = "La date de fin est requise.";
+            }
+            
+            // Vérifier que l'agent existe
+            if (!empty($agent_id)) {
+                try {
+                    $stmt_check_agent = $pdo->prepare("SELECT id FROM agent WHERE id = :agent_id");
+                    $stmt_check_agent->execute(['agent_id' => $agent_id]);
+                    if (!$stmt_check_agent->fetchColumn()) {
+                        $validation_errors[] = "L'agent sélectionné n'existe pas.";
+                    }
+                } catch (PDOException $e) {
+                    error_log("Erreur vérification agent : " . $e->getMessage());
+                    $validation_errors[] = "Erreur lors de la vérification de l'agent.";
+                }
+            }
+            
+            // Vérifier que le type d'absence existe
+            if (!empty($id_type_absence)) {
+                try {
+                    $stmt_check_type = $pdo->prepare("SELECT id FROM type_absence WHERE id = :type_id");
+                    $stmt_check_type->execute(['type_id' => $id_type_absence]);
+                    if (!$stmt_check_type->fetchColumn()) {
+                        $validation_errors[] = "Le type d'absence sélectionné n'existe pas.";
+                    }
+                } catch (PDOException $e) {
+                    error_log("Erreur vérification type absence : " . $e->getMessage());
+                    $validation_errors[] = "Erreur lors de la vérification du type d'absence.";
+                }
+            }
+            
+            if (!empty($validation_errors)) {
+                $messages['errors'] = array_merge($messages['errors'], $validation_errors);
+                break;
+            }
+            
+            // Gestion des fichiers
+            if (isset($_FILES['justificatif']) && $_FILES['justificatif']['error'] === UPLOAD_ERR_OK) {
+                $uploadResult = secureFileUpload($_FILES['justificatif']);
+                if ($uploadResult['success']) {
+                    $justificatif_path = $uploadResult['path'];
+                } else {
+                    $messages['errors'][] = "Erreur upload fichier: " . $uploadResult['error'];
+                    break;
+                }
+            } elseif ($action === 'update' && $absence_id) {
+                // Conserver l'ancien justificatif si pas de nouveau fichier
+                try {
+                    $stmt = $pdo->prepare("SELECT justificatif FROM absence WHERE id = :id");
+                    $stmt->execute(['id' => $absence_id]);
+                    $justificatif_path = $stmt->fetchColumn();
+                } catch (PDOException $e) {
+                    error_log("Erreur récupération justificatif : " . $e->getMessage());
+                }
+            } elseif (isset($_FILES['justificatif']) && $_FILES['justificatif']['error'] !== UPLOAD_ERR_NO_FILE) {
+                // Il y a eu une erreur d'upload
+                $upload_errors = [
+                    UPLOAD_ERR_INI_SIZE => 'Le fichier dépasse la taille maximum autorisée par PHP.',
+                    UPLOAD_ERR_FORM_SIZE => 'Le fichier dépasse la taille maximum du formulaire.',
+                    UPLOAD_ERR_PARTIAL => 'Le fichier n\'a été que partiellement téléchargé.',
+                    UPLOAD_ERR_NO_TMP_DIR => 'Dossier temporaire manquant.',
+                    UPLOAD_ERR_CANT_WRITE => 'Échec de l\'écriture du fichier sur le disque.',
+                    UPLOAD_ERR_EXTENSION => 'Une extension PHP a arrêté l\'upload du fichier.'
+                ];
+                $error_code = $_FILES['justificatif']['error'];
+                $messages['errors'][] = "Erreur upload: " . ($upload_errors[$error_code] ?? "Erreur inconnue ($error_code)");
+                break;
+            }
+            
+            // Validation des dates
+            if ($date_debut && $date_fin) {
+                $d1 = new DateTime($date_debut);
+                $d2 = new DateTime($date_fin);
+                
+                if ($d1 > $d2) {
+                    $messages['errors'][] = "La date de début ne peut pas être postérieure à la date de fin.";
+                    break;
+                }
+                
+                $duree_jours = $d1->diff($d2)->days + 1;
+                
+                // Vérifier qui peut autoriser cette absence
+                $autorisationInfo = getAutorisationInfo($pdo, $duree_jours);
+                if (!$autorisationInfo['success']) {
+                    $messages['errors'][] = $autorisationInfo['error'] ?? "Erreur dans la détermination de l'autorisation.";
+                    break;
+                }
+            }
+            
+            // Récupérer le statut "en attente"
+            try {
+                $stmtStatut = $pdo->prepare("SELECT id FROM statut_absence WHERE LOWER(TRIM(libelle)) = 'en attente' LIMIT 1");
+                $stmtStatut->execute();
+                $id_statut = $stmtStatut->fetchColumn();
+                
+                if (!$id_statut) {
+                    $messages['errors'][] = "Le statut 'en attente' est introuvable dans la base de données.";
+                    break;
+                }
+            } catch (PDOException $e) {
+                error_log("Erreur récupération statut : " . $e->getMessage());
+                $messages['errors'][] = "Erreur lors de la récupération du statut: " . $e->getMessage();
+                break;
+            }
+            
+            // Traitement selon l'action
+            try {
+                if ($action === 'add') {
+                    // AJOUT D'UNE NOUVELLE ABSENCE
+                    error_log("Tentative d'ajout absence - agent_id: $agent_id, type: $id_type_absence, debut: $date_debut, fin: $date_fin");
+                    
+                    $stmt = $pdo->prepare("
+                        INSERT INTO absence (agent_id, date_debut, date_fin, id_type_absence, justificatif, id_statut, description)
+                        VALUES (:agent_id, :date_debut, :date_fin, :id_type_absence, :justificatif, :id_statut, :description)
+                    ");
+                    
+                    $result = $stmt->execute([
+                        'agent_id' => $agent_id,
+                        'date_debut' => $date_debut,
+                        'date_fin' => $date_fin,
+                        'id_type_absence' => $id_type_absence,
+                        'justificatif' => $justificatif_path,
+                        'id_statut' => $id_statut,
+                        'description' => $description
+                    ]);
+                    
+                    if ($result) {
+                        $messages['success'][] = "Absence ajoutée avec succès.";
+                        error_log("Absence ajoutée avec succès - ID: " . $pdo->lastInsertId());
+                    } else {
+                        $messages['errors'][] = "Échec de l'insertion en base de données.";
+                        error_log("Échec insertion absence - Infos PDO: " . print_r($stmt->errorInfo(), true));
+                    }
+                    
+                } elseif ($action === 'update' && $absence_id) {
+                    // MODIFICATION D'UNE ABSENCE EXISTANTE
+                    error_log("Tentative de modification absence ID: $absence_id - agent_id: $agent_id, type: $id_type_absence");
+                    
+                    // Vérifier que l'absence existe et n'est pas déjà autorisée
+                    $stmtCheck = $pdo->prepare("
+                        SELECT s.libelle as statut 
+                        FROM absence a 
+                        JOIN statut_absence s ON a.id_statut = s.id 
+                        WHERE a.id = :id
+                    ");
+                    $stmtCheck->execute(['id' => $absence_id]);
+                    $currentStatus = $stmtCheck->fetchColumn();
+                    
+                    if (!$currentStatus) {
+                        $messages['errors'][] = "Absence introuvable.";
+                        break;
+                    }
+                    
+                    if (strtolower(trim($currentStatus)) === 'autoriser') {
+                        $messages['errors'][] = "Impossible de modifier une absence déjà autorisée.";
+                        break;
+                    }
+                    
+                    // Effectuer la mise à jour
+                    $stmt = $pdo->prepare("
+                        UPDATE absence SET
+                            agent_id = :agent_id,
+                            date_debut = :date_debut,
+                            date_fin = :date_fin,
+                            id_type_absence = :id_type_absence,
+                            justificatif = :justificatif,
+                            description = :description
+                        WHERE id = :id
+                    ");
+                    
+                    $result = $stmt->execute([
+                        'agent_id' => $agent_id,
+                        'date_debut' => $date_debut,
+                        'date_fin' => $date_fin,
+                        'id_type_absence' => $id_type_absence,
+                        'justificatif' => $justificatif_path,
+                        'description' => $description,
+                        'id' => $absence_id
+                    ]);
+                    
+                    if ($result) {
+                        $messages['success'][] = "Absence modifiée avec succès.";
+                        error_log("Absence modifiée avec succès - ID: $absence_id");
+                    } else {
+                        $messages['errors'][] = "Échec de la modification en base de données.";
+                        error_log("Échec modification absence - Infos PDO: " . print_r($stmt->errorInfo(), true));
+                    }
+                }
+                
+            } catch (PDOException $e) {
+                error_log("Erreur PDO " . ($action === 'add' ? 'ajout' : 'modification') . " absence - Code: " . $e->getCode() . " Message: " . $e->getMessage());
+                $messages['errors'][] = "Erreur base de données: " . $e->getMessage();
+            }
+            
+            break;
+        case 'validate':
+    // --- Vérification des permissions ---
+    if (!in_array($role_utilisateur, ['chef de service', 'directrice'])) {
+        $messages['errors'][] = "Vous n'avez pas les permissions pour autoriser une absence.";
+        break;
+    }
+
+    $absence_id = (int)($_POST['absence_id'] ?? 0);
+    if ($absence_id <= 0) {
+        $messages['errors'][] = "ID d'absence manquant ou invalide.";
+        break;
+    }
+
+    error_log("Validation absence ID $absence_id par rôle $role_utilisateur");
+
+    try {
+        // --- Récupération de l'absence ---
+        $stmt = $pdo->prepare("
+            SELECT a.id, a.agent_id, a.id_statut, a.date_debut, a.date_fin,
+                   DATEDIFF(a.date_fin, a.date_debut) + 1 AS duree_jours,
+                   s.libelle AS statut
+            FROM absence a
+            JOIN statut_absence s ON a.id_statut = s.id
+            WHERE a.id = :id
+        ");
+        $stmt->execute(['id' => $absence_id]);
+        $absence = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$absence) {
+            $messages['errors'][] = "Absence introuvable.";
+            break;
+        }
+
+        $statutActuel = strtolower(trim($absence['statut']));
+        if ($statutActuel !== 'en attente') {
+            $messages['errors'][] = "Absence non autorisable (statut actuel : {$absence['statut']}).";
+            break;
+        }
+
+        // --- Vérification des permissions selon la durée ---
+        $duree = (int)$absence['duree_jours'];
+        $autorise = match (true) {
+            $role_utilisateur === 'directrice' => true,
+            $role_utilisateur === 'chef de service' && $duree <= 15 => true,
+            default => false
+        };
+
+        if (!$autorise) {
+            $messages['errors'][] = "Seule la directrice peut autoriser une absence de plus de 15 jours.";
+            break;
+        }
+
+        // --- Récupération du statut "autorisé" ---
+        $stmt = $pdo->query("
+            SELECT id
+            FROM statut_absence
+            WHERE LOWER(TRIM(libelle)) IN ('autoriser','autorisé','approuvé','validé')
+            ORDER BY FIELD(LOWER(TRIM(libelle)), 'autoriser','autorisé','approuvé','validé')
+            LIMIT 1
+        ");
+        $statutAutoriseId = $stmt->fetchColumn();
+
+        if (!$statutAutoriseId) {
+            $messages['errors'][] = "Aucun statut d'autorisation valide trouvé en base.";
+            break;
+        }
+
+        // --- Récupération du statut "en attente" ---
+        $stmt = $pdo->query("
+            SELECT id
+            FROM statut_absence
+            WHERE LOWER(TRIM(libelle)) = 'en attente'
+            LIMIT 1
+        ");
+        $statutEnAttenteId = $stmt->fetchColumn();
+        error_log("DEBUG statut_en_attente_id: " . $statutEnAttenteId);
+
+        if (!$statutEnAttenteId) {
+            $messages['errors'][] = "Statut 'en attente' introuvable en base.";
+            break;
+        }
+
+        // --- Transaction sécurisée ---
+        $pdo->beginTransaction();
+
+        // --- Mise à jour du statut d'absence ---
+        $stmt = $pdo->prepare("
+            UPDATE absence 
+            SET id_statut = :statut, validation = :login_id, date_autorisation = NOW()
+            WHERE id = :id AND id_statut = :statut_attente
+        ");
+        $stmt->execute([
+            'statut'         => $statutAutoriseId,
+            'login_id'       => $login_id,
+            'id'             => $absence_id,
+            'statut_attente' => $statutEnAttenteId
+        ]);
+
+        if ($stmt->rowCount() === 0) {
+            throw new Exception("L'absence n'est plus en attente (mise à jour impossible).");
+        }
+
+        // --- Insertion automatique dans la table presence ---
+        $date_debut = new DateTime($absence['date_debut']);
+        $date_fin   = new DateTime($absence['date_fin']);
+        $today      = new DateTime();
+
+        $stmtPresence = $pdo->prepare("
+            INSERT INTO presence (agent_id, date, heure, type)
+            VALUES (:agent_id, :date, :heure, :type)
+        ");
+
+        for ($date = clone $date_debut; $date <= $date_fin; $date->modify('+1 day')) {
+            if ($date <= $today) {
+                // Vérifier si les lignes existent déjà
+                $check = $pdo->prepare("SELECT 1 FROM presence WHERE agent_id=:agent_id AND date=:date LIMIT 1");
+                $check->execute([
+                    'agent_id' => $absence['agent_id'],
+                    'date'     => $date->format('Y-m-d'),
+                ]);
+
+                if (!$check->fetchColumn()) {
+                    // Insérer arrivée avant 09h et départ à 14h30
+                    foreach (['arrivée'=>'08:50:00', 'depart'=>'14:30:00'] as $type => $heure) {
+                        $stmtPresence->execute([
+                            'agent_id' => $absence['agent_id'],
+                            'date'     => $date->format('Y-m-d'),
+                            'heure'    => $heure,
+                            'type'     => $type,
+                        ]);
+                    }
+                }
+            }
+        }
+
+        $pdo->commit();
+        $messages['success'][] = "Absence (ID $absence_id) autorisée et présences insérées.";
+        error_log("Absence ID $absence_id validée par login ID $login_id");
+
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $messages['errors'][] = "Erreur lors de l'autorisation : " . $e->getMessage();
+        error_log("Erreur validation absence : " . $e->getMessage());
+    }
+    break;
+
+case 'reject':
+    // --- Vérification des permissions ---
+    if (!in_array($role_utilisateur, ['chef de service', 'directrice'])) {
+        $messages['errors'][] = "Vous n'avez pas les permissions pour rejeter une absence.";
+        break;
+    }
+
+    $absence_id = (int)($_POST['absence_id'] ?? 0);
+    $motif_rejet = trim($_POST['motif_rejet'] ?? ''); // Récupérer le motif de rejet
+    
+    if ($absence_id <= 0) {
+        $messages['errors'][] = "ID d'absence manquant ou invalide.";
+        break;
+    }
+
+    // Validation du motif de rejet
+    if (empty($motif_rejet)) {
+        $messages['errors'][] = "Le motif du rejet est obligatoire.";
+        break;
+    }
+
+    if (strlen($motif_rejet) < 10) {
+        $messages['errors'][] = "Le motif du rejet doit contenir au moins 10 caractères.";
+        break;
+    }
+
+    if (strlen($motif_rejet) > 500) {
+        $messages['errors'][] = "Le motif du rejet ne peut pas dépasser 500 caractères.";
+        break;
+    }
+
+    error_log("Rejet absence ID $absence_id par rôle $role_utilisateur avec motif: $motif_rejet");
+
+    try {
+        // --- Récupérer l'absence ---
+        $stmt = $pdo->prepare("
+            SELECT a.id, a.id_statut, DATEDIFF(a.date_fin, a.date_debut) + 1 AS duree_jours, 
+                   s.libelle AS statut, CONCAT(ag.nom, ' ', ag.prenom) AS agent_nom
+            FROM absence a
+            JOIN statut_absence s ON a.id_statut = s.id
+            JOIN agent ag ON a.agent_id = ag.id
+            WHERE a.id = :id
+        ");
+        $stmt->execute(['id' => $absence_id]);
+        $absence = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$absence) {
+            $messages['errors'][] = "Absence introuvable.";
+            break;
+        }
+
+        if (strtolower(trim($absence['statut'])) !== 'en attente') {
+            $messages['errors'][] = "Cette absence n'est pas en attente de décision (statut actuel : {$absence['statut']}).";
+            break;
+        }
+
+        $duree = (int)$absence['duree_jours'];
+        $autorise = match (true) {
+            $role_utilisateur === 'directrice' => true,
+            $role_utilisateur === 'chef de service' && $duree <= 15 => true,
+            default => false
+        };
+
+        if (!$autorise) {
+            $messages['errors'][] = "Seule la directrice peut rejeter une absence de plus de 15 jours.";
+            break;
+        }
+
+        // --- Récupérer les IDs des statuts ---
+        $stmt = $pdo->query("
+            SELECT id, libelle 
+            FROM statut_absence 
+            WHERE LOWER(TRIM(libelle)) IN ('rejeter','rejeté','refusé','refuser')
+            LIMIT 1
+        ");
+        $statutRejete = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$statutRejete) {
+            $messages['errors'][] = "Aucun statut de rejet valide trouvé en base.";
+            break;
+        }
+
+        $stmt = $pdo->query("
+            SELECT id 
+            FROM statut_absence 
+            WHERE LOWER(TRIM(libelle)) = 'en attente'
+            LIMIT 1
+        ");
+        $statutEnAttenteId = $stmt->fetchColumn();
+        if (!$statutEnAttenteId) {
+            $messages['errors'][] = "Statut 'en attente' introuvable en base.";
+            break;
+        }
+
+        // --- Transaction sécurisée ---
+        $pdo->beginTransaction();
+        
+        // Mettre à jour l'absence avec le motif de rejet
+        $stmt = $pdo->prepare("
+            UPDATE absence
+            SET id_statut = :statut_rejete,
+                validation = :login_id,
+                date_autorisation = NOW(),
+                motif_rejet = :motif_rejet
+            WHERE id = :id
+              AND id_statut = :statut_en_attente
+        ");
+        
+        $stmt->execute([
+            'statut_rejete' => $statutRejete['id'],
+            'login_id'      => $login_id,
+            'motif_rejet'   => $motif_rejet,
+            'id'            => $absence_id,
+            'statut_en_attente' => $statutEnAttenteId
+        ]);
+
+        if ($stmt->rowCount() === 0) {
+            throw new Exception("L'absence n'est plus en attente.");
+        }
+
+        // Log pour traçabilité
+        error_log("Absence rejetée - ID: $absence_id, Agent: {$absence['agent_nom']}, Motif: $motif_rejet, Par: login_id $login_id");
+
+        $pdo->commit();
+        $messages['success'][] = "Absence (ID $absence_id) rejetée avec succès. Motif enregistré.";
+
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        $messages['errors'][] = "Erreur lors du rejet : " . $e->getMessage();
+        error_log("Erreur rejet absence : " . $e->getMessage());
+    }
+    break;
+
+
+if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+    // Retourner une réponse JSON pour les requêtes AJAX
+    header('Content-Type: application/json');
+    
+    if (!empty($messages['success'])) {
+        echo json_encode([
+            'success' => true,
+            'messages' => $messages
+        ]);
+    } else {
+        echo json_encode([
+            'success' => false,
+            'messages' => $messages
+        ]);
+    }
+    exit();
+}
+    }}
+// Suppression d'une absence (via GET)
+if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['id']) && empty($messages['errors'])) {
+    $id = (int)$_GET['id'];
+    
+    // Vérifier les permissions
+    if ($role_utilisateur !== 'secretaire') {
+        $messages['errors'][] = "Vous n'avez pas les permissions pour supprimer une absence.";
+    } else {
+        try {
+            // Récupérer les informations de l'absence avant suppression
+            $stmt = $pdo->prepare("
+                SELECT a.*, s.libelle as statut
+                FROM absence a
+                JOIN statut_absence s ON a.id_statut = s.id
+                WHERE a.id = :id 
+            ");
+            $stmt->execute(['id' => $id]);
+            $absence = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($absence) {
+                // Vérifier que l'absence n'est pas déjà autorisée
+                if (strtolower(trim($absence['statut'])) === 'autoriser') {
+                    $messages['errors'][] = "Impossible de supprimer une absence déjà autorisée.";
+                } else {
+                    // Supprimer l'enregistrement
+                    $stmt48 = $pdo->prepare("DELETE FROM absence WHERE id = :id");
+                    $stmt48->execute(['id' => $id]);
+                    
+                    // Supprimer le justificatif s'il existe
+                    if (!empty($absence['justificatif']) && file_exists($absence['justificatif'])) {
+                        unlink($absence['justificatif']);
+                    }
+                    
+                    $messages['success'][] = "Absence supprimée avec succès.";
+                }
+            } else {
+                $messages['errors'][] = "Absence introuvable.";
+            }
+        } catch (PDOException $e) {
+            error_log("Erreur suppression absence : " . $e->getMessage());
+            $messages['errors'][] = "Erreur lors de la suppression.";
+        }
+    }
+}
+
+// Construction de la requête principale pour récupérer les absences
 $sql = "
     SELECT 
         aj.id AS id,
@@ -281,40 +789,46 @@ $sql = "
         aj.date_fin AS fin,
         t.libelle AS motif,
         aj.justificatif AS justificatif,
-        s.libelle AS statut
+        s.libelle AS statut,
+        aj.description,
+        DATEDIFF(aj.date_fin, aj.date_debut) + 1 as duree_jours
     FROM absence aj
     INNER JOIN agent a ON aj.agent_id = a.id
     INNER JOIN type_absence t ON aj.id_type_absence = t.id
     INNER JOIN statut_absence s ON aj.id_statut = s.id
 ";
 
-// Initialisation des paramètres
 $params = [];
+$whereConditions = [];
 
-// Ajout de conditions selon le rôle de l'utilisateur
+// Filtrage par rôle utilisateur
 if ($role_utilisateur === 'chef de service') {
-    $sql .= "
-        INNER JOIN bureau b ON a.bureau_id = b.id
-        INNER JOIN service serv ON b.service_id = serv.id
-        WHERE DATEDIFF(aj.date_fin, aj.date_debut) + 1 <= 15
-        AND serv.id = (
+    // Chef de service : absences <= 15 jours de son service uniquement
+    $whereConditions[] = "DATEDIFF(aj.date_fin, aj.date_debut) + 1 <= 15";
+    $whereConditions[] = "a.bureau_id IN (
+        SELECT b.id 
+        FROM bureau b 
+        WHERE b.service_id = (
             SELECT b2.service_id
             FROM agent ag
             INNER JOIN bureau b2 ON ag.bureau_id = b2.id
             WHERE ag.id = :agent_id
         )
-    ";
+    )";
     $params['agent_id'] = $agent_conn;
-
+    
 } elseif ($role_utilisateur === 'directrice') {
-    $sql .= "
-        WHERE DATEDIFF(aj.date_fin, aj.date_debut) + 1 > 15
-    ";
-
-} else {
-    // Autres rôles (secrétaire, etc.)
-    $sql .= " ORDER BY aj.date_debut DESC";
+    // Directrice : absences > 15 jours uniquement
+    $whereConditions[] = "DATEDIFF(aj.date_fin, aj.date_debut) + 1 > 15";
 }
+// Secrétaire : voir toutes les absences (pas de filtre)
+
+// Ajout de la clause WHERE si nécessaire
+if (!empty($whereConditions)) {
+    $sql .= " WHERE " . implode(" AND ", $whereConditions);
+}
+
+$sql .= " ORDER BY aj.date_debut DESC";
 
 // Exécution de la requête
 try {
@@ -322,47 +836,8 @@ try {
     $stmt->execute($params);
     $absences = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    error_log("Erreur lors de la récupération des absences : " . $e->getMessage());
+    error_log("Erreur récupération absences : " . $e->getMessage());
     $messages['errors'][] = "Erreur lors du chargement des absences.";
-}
-
-// Requête recherche agents
-try {
-    $stmt = $pdo->prepare("
-        SELECT a.id, a.nom, a.prenom, CONCAT(a.prenom, ' ', a.nom) AS nom_prenom, a.matricule, 
-               a.email, a.telephone, a.photo, a.bureau_id, b.libele AS libele_bureau, 
-               s.libele AS libele_service 
-        FROM agent a 
-        JOIN bureau b ON a.bureau_id = b.id 
-        JOIN service s ON b.service_id = s.id 
-        WHERE a.telephone LIKE :search OR CONCAT(a.prenom, ' ', a.nom) LIKE :search
-    ");
-    $stmt->execute(['search' => "%$search%"]);
-    $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    error_log("Erreur dans absence_content.php (récupération agents) : " . $e->getMessage());
-    $messages['errors'][] = "Erreur lors de la récupération des agents.";
-}
-
-try {
-    $stmt = $pdo->query("SELECT libele FROM bureau");
-    $bureaux2 = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    error_log("Erreur dans absence_content.php (récupération bureaux) : " . $e->getMessage());
-    $messages['errors'][] = "Erreur lors de la récupération des bureaux.";
-}
-
-try {
-    $stmt45 = $pdo->query("
-        SELECT a.id, a.bureau_id, CONCAT(a.nom, ' ', a.prenom) AS nom_prenom, b.libele AS bureau 
-        FROM agent a 
-        JOIN bureau b ON a.bureau_id = b.id
-        WHERE a.bureau_id = b.id
-    ");
-    $agents_bureau = $stmt45->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    error_log("Erreur dans absence_content.php (récupération agents bureau) : " . $e->getMessage());
-    $messages['errors'][] = "Erreur lors de la récupération des agents.";
 }
 
 ?>
@@ -375,7 +850,6 @@ echo '<script id="AbsencesDatas" type="application/json">' . json_encode($absenc
 echo '<script id="typesAbsencesDatas" type="application/json">' . json_encode($types_absences, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
 echo '<script id="statutsAbsencesDatas" type="application/json">' . json_encode($statuts, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
 echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role_utilisateur, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) . '</script>';
-
 ?>
 
 <!-- Filtres et recherche -->
@@ -403,15 +877,15 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <i class="fas fa-building text-gray-400"></i>
                 </div>
-                <select name="motif" id="filter_types"
-                    class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
-                    <option value="">Tous les motifs</option>
-                    <?php foreach ($types_absences as $type): ?>
-                        <option value="<?= htmlspecialchars($type['id'], ENT_QUOTES, 'UTF-8') ?>">
-                            <?= htmlspecialchars($type['libelle'], ENT_QUOTES, 'UTF-8') ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+               <select name="motif" id="search_filter_types"
+    class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+    <option value="">Tous les motifs</option>
+    <?php foreach ($types_absences as $type): ?>
+        <option value="<?= htmlspecialchars($type['id'], ENT_QUOTES, 'UTF-8') ?>">
+            <?= htmlspecialchars($type['libelle'], ENT_QUOTES, 'UTF-8') ?>
+        </option>
+    <?php endforeach; ?>
+</select>
             </div>
         </div>
         <div>
@@ -420,15 +894,15 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <i class="fas fa-door-open text-gray-400"></i>
                 </div>
-                <select name="statut" id="filter_statuts" 
-                     class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
-                    <option value="">Tous les statuts</option>
-                    <?php foreach ($statuts as $statut): ?>
-                        <option value="<?= htmlspecialchars($statut['id'], ENT_QUOTES, 'UTF-8') ?>">
-                            <?= htmlspecialchars($statut['libelle'], ENT_QUOTES, 'UTF-8') ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <select name="statut" id="search_filter_statuts" 
+     class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+    <option value="">Tous les statuts</option>
+    <?php foreach ($statuts as $statut): ?>
+        <option value="<?= htmlspecialchars($statut['id'], ENT_QUOTES, 'UTF-8') ?>">
+            <?= htmlspecialchars($statut['libelle'], ENT_QUOTES, 'UTF-8') ?>
+        </option>
+    <?php endforeach; ?>
+</select>
             </div>
         </div>
         <div class="flex items-end space-x-2">
@@ -506,7 +980,7 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
                 </button>
             </form>
         <?php else: ?>
-            <button class="edit-absence-btn text-green-600 hover:text-green-900 text-sm" data-id="<?= htmlspecialchars($absence['id']) ?>" title="Modifier">
+            <button class="edit-absence-btn text-blue-600 hover:text-blue-900 text-sm" data-id="<?= htmlspecialchars($absence['id']) ?>" title="Modifier">
                 <i class="fas fa-edit mr-1"></i> 
             </button>
             <button class="delete-absence-btn text-red-600 hover:text-red-900 text-sm" data-id="<?= htmlspecialchars($absence['id']) ?>" title="Supprimer">
@@ -523,11 +997,11 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
             </button>
         <?php elseif ($statut === 'autoriser'): ?>
             <span class="text-green-600 text-sm italic">
-                <i class="fas fa-check-circle mr-1"></i> Déjà autorisé
+                 Déjà autorisé
             </span>
         <?php elseif ($statut === 'rejeter'): ?>
             <span class="text-red-600 text-sm italic">
-                <i class="fas fa-times-circle mr-1"></i> Déjà rejeté
+                 Déjà rejeté
             </span>
         <?php endif; ?>
     <?php endif; ?>
@@ -563,26 +1037,54 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
                                      class="rounded-full object-cover"
                                      onerror="this.parentNode.innerHTML = '<div class=\'w-10 h-10 rounded-full bg-green-100 flex items-center justify-center\'><span class=\'text-green-600 font-medium text-xs\'>' + getInitials('<?= htmlspecialchars($absence['nom_prenom'], ENT_QUOTES, 'UTF-8') ?>') + '</span></div>'">
                             <?php else: ?>
-                                <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-                                    <span class="text-green-600 font-medium text-xs">
+                                <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                    <span class=" text-blue-600 textfont-medium text-xs">
                                         <?= strtoupper(substr($absence['prenom'], 0, 1) . substr($absence['nom'], 0, 1)) ?>
                                     </span>
                                 </div>
                             <?php endif; ?>
                         </div>
                         <div>
-                            <div class="text-sm font-medium text-gray-900"><?= htmlspecialchars($absence['nom_prenom'], ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-sm font-medium text-black"><?= htmlspecialchars($absence['nom_prenom'], ENT_QUOTES, 'UTF-8') ?></div>
                         </div>
                     </div>
                 </td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900"><?= htmlspecialchars($absence['debut'], ENT_QUOTES, 'UTF-8') ?></td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500"><?= htmlspecialchars($absence['fin'], ENT_QUOTES, 'UTF-8') ?></td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500"><?= htmlspecialchars($absence['motif'], ENT_QUOTES, 'UTF-8') ?></td>
-                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500"><?= htmlspecialchars($absence['justificatif'], ENT_QUOTES, 'UTF-8') ?></td>
-               <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-black"><?= htmlspecialchars($absence['debut'], ENT_QUOTES, 'UTF-8') ?></td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-black"><?= htmlspecialchars($absence['fin'], ENT_QUOTES, 'UTF-8') ?></td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-black"><?= htmlspecialchars($absence['motif'], ENT_QUOTES, 'UTF-8') ?></td>
+ <td class="px-4 py-3 whitespace-nowrap text-sm text-black text-center">
+    <?php if (!empty($absence['justificatif']) && file_exists($absence['justificatif'])): ?>
+        <?php 
+            $ext = strtolower(pathinfo($absence['justificatif'], PATHINFO_EXTENSION));
+            $url = htmlspecialchars($absence['justificatif'], ENT_QUOTES, 'UTF-8');
+        ?>
+        
+        <?php if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'])): ?>
+            <!-- Icône œil pour image -->
+            <a href="<?= $url ?>" target="_blank" title="Voir l'image" class="text-blue-600 hover:opacity-75 text-xl">
+                <i class="fas fa-eye"></i>
+            </a>
+        <?php elseif ($ext === 'pdf'): ?>
+            <!-- Icône œil pour PDF -->
+            <a href="<?= $url ?>" target="_blank" title="Voir le PDF" class="text-red-600 hover:opacity-75 text-xl">
+                <i class="fas fa-eye"></i>
+            </a>
+        <?php else: ?>
+            <!-- Icône œil pour fichier générique -->
+            <a href="<?= $url ?>" target="_blank" title="Télécharger le fichier" class="text-gray-600 hover:opacity-75 text-xl">
+                <i class="fas fa-eye"></i>
+            </a>
+        <?php endif; ?>
+    <?php else: ?>
+        <span class="text-gray-400 italic">Aucun</span>
+    <?php endif; ?>
+</td>
+
+
+<td class="px-4 py-3 whitespace-nowrap text-sm text-center">
     <?php if (strtolower($absence['statut']) === 'autoriser'): ?>
         <span title="autoriser" style="color:green; font-size: 18px;">✔️</span>
-    <?php elseif (strtolower($absence['statut']) === 'rejeté'): ?>
+    <?php elseif (strtolower($absence['statut']) === 'rejeter'): ?>
         <span title="rejeter" style="color:red; font-size:18px;">❌</span>
     <?php elseif (strtolower($absence['statut']) === 'en attente'): ?>
         <span title="en attente" style="color:gray; font-size:18px;">⏳</span>
@@ -595,25 +1097,35 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
         <?php $statut = strtolower($absence['statut']); ?>
 
         <?php if ($role_utilisateur === 'secretaire'): ?>
-            <?php if ($statut === 'autoriser'): ?>
-                <!-- Bouton Imprimer -->
-                <form action="generer_autorisation.php" method="post" target="_blank">
-                    <input type="hidden" name="absence_id" value="<?= htmlspecialchars($absence['id']) ?>">
-                    <button type="submit" class="text-green-600 hover:text-green-800" title="Imprimer l'autorisation">
-                        <i class="fas fa-print"></i>
-                    </button>
-                </form>
-            <?php else: ?>
-                <!-- Modifier / Supprimer -->
-                <button class="edit-absence-btn text-green-600 hover:text-green-900"
-                        data-id="<?= htmlspecialchars($absence['id'], ENT_QUOTES, 'UTF-8') ?>" title="Modifier">
-                    <i class="fas fa-edit"></i>Modifier
-                </button>
-                <button class="delete-absence-btn text-red-600 hover:text-red-900"
-                        data-id="<?= htmlspecialchars($absence['id'], ENT_QUOTES, 'UTF-8') ?>" title="Supprimer">
-                    <i class="fas fa-trash"></i>Supprimer
-                </button>
-            <?php endif; ?>
+    <?php if ($statut === 'autoriser'): ?>
+        <!-- Bouton Imprimer -->
+        <form action="generer_autorisation.php" method="post" target="_blank">
+            <input type="hidden" name="absence_id" value="<?= htmlspecialchars($absence['id']) ?>">
+            <button type="submit" class="text-blue-600 hover:text-blue-800" title="Imprimer l'autorisation">
+                <i class="fas fa-print"></i>
+            </button>
+        </form>
+    <?php elseif ($statut === 'rejeter'): ?>
+        <!-- Affichage motif de rejet -->
+             <form action="generer_refus.php" method="post" target="_blank">
+            <input type="hidden" name="absence_id" value="<?= htmlspecialchars($absence['id']) ?>">
+            <button type="submit" class="text-blue-600 hover:text-blue-800" title="Imprimer le refus de la demande d'absence">
+                <i class="fas fa-print"></i>
+            </button>
+        </form>
+        
+    <?php else: ?>
+        <!-- Modifier / Supprimer -->
+        <button class="edit-absence-btn text-blue-600 hover:text-blue-800"
+                data-id="<?= htmlspecialchars($absence['id'], ENT_QUOTES, 'UTF-8') ?>" title="Modifier">
+            <i class="fas fa-edit"></i>
+        </button>
+        <button class="delete-absence-btn text-red-600 hover:text-red-900"
+                data-id="<?= htmlspecialchars($absence['id'], ENT_QUOTES, 'UTF-8') ?>" title="Supprimer">
+            <i class="fas fa-trash"></i>
+        </button>
+    <?php endif; ?>
+
 
         <?php elseif ($role_utilisateur === 'chef de service' || $role_utilisateur === 'directrice'): ?>
             <?php if ($statut === 'en attente'): ?>
@@ -628,11 +1140,11 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
                 </button>
             <?php elseif ($statut === 'autoriser'): ?>
                 <span class="text-green-600 text-sm italic">
-                    <i class="fas fa-check-circle mr-1"></i> Déjà autorisé
+                   Déjà autorisé
                 </span>
             <?php elseif ($statut === 'rejeter'): ?>
                 <span class="text-red-600 text-sm italic">
-                    <i class="fas fa-times-circle mr-1"></i> Déjà rejeté
+                     Déjà rejeté
                 </span>
             <?php endif; ?>
         <?php endif; ?>
@@ -644,6 +1156,7 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
     </table>
 </div>
 
+<!-- Modal ajout/modif absence -->
 <!-- Modal ajout/modif absence -->
 <div id="absenceModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
     <div class="bg-white rounded-lg shadow-2xl w-full max-w-md sm:max-w-lg md:max-w-4xl p-4 sm:p-6 transform transition-all duration-300 scale-95 opacity-0"
@@ -661,9 +1174,11 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
 
         <!-- Formulaire -->
         <form id="absenceForm" action="?page=absence_content" method="post" enctype="multipart/form-data" class="p-4 sm:p-6">
-            <input type="hidden" id="actions" name="action" value="add">
-            <input type="hidden" id="absence_id" name="absence_id" value="">
+             <input type="hidden" id="absence_id" name="absence_id" value="">
+            <input type="hidden" id="formActions" name="action" value="add">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                <!-- Filtrer par bureau -->
                 <div class="mb-4">
                     <label for="filter_bureau" class="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Filtrer par bureau</label>
                     <div class="relative">
@@ -681,8 +1196,9 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
                         </select>
                     </div>
                 </div>
+
                 <!-- Agent -->
-               <div class="mb-4">
+                <div class="mb-4">
                     <label for="select_agent_id" class="block text-sm font-medium text-gray-700 mb-1">Agent</label>
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -697,26 +1213,26 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
                 </div>
 
                 <!-- Motif -->
-               <div class="mb-4">
+                <div class="mb-4">
                     <label for="type_absence" class="block text-sm font-medium text-gray-700 mb-1">Motif</label>
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <i class="fas fa-list text-gray-400"></i>
                         </div>
-                        <select name="motif" id="filter_types"
-                            class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
-                            <option value="">choisir un motif</option>
-                            <?php foreach ($types_absences as $type): ?>
-                                <option value="<?= htmlspecialchars($type['id'], ENT_QUOTES, 'UTF-8') ?>">
-                                    <?= htmlspecialchars($type['libelle'], ENT_QUOTES, 'UTF-8') ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                        <select name="motif" id="filter_types" required
+    class="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+    <option value="">Choisir un motif</option>
+    <?php foreach ($types_absences as $type): ?>
+        <option value="<?= htmlspecialchars($type['id'], ENT_QUOTES, 'UTF-8') ?>">
+            <?= htmlspecialchars($type['libelle'], ENT_QUOTES, 'UTF-8') ?>
+        </option>
+    <?php endforeach; ?>
+</select>
                     </div>
                 </div>
 
-                 <!-- Justificatif -->
-                 <div class="mb-4">
+                <!-- Justificatif -->
+                <div class="mb-4">
                     <label for="justificatif" class="block text-sm font-medium text-gray-700 mb-1">Justificatif</label>
                     <div class="relative w-full">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -726,7 +1242,8 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
                                class="block w-full pl-10 pr-4 py-2 border border-gray-300 text-sm rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
                     </div>
                 </div>
-  <!-- Date début -->
+
+                <!-- Date début -->
                 <div class="mb-4">
                     <label for="date_debut" class="block text-sm font-medium text-gray-700 mb-1">Date début</label>
                     <input type="date" name="date_debut" id="filter_date_debut" required
@@ -739,7 +1256,20 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
                     <input type="date" name="date_fin" id="filter_date_fin" required
                            class="w-full pl-3 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
+
+                <!-- Description -->
+                <div class="mb-4 sm:col-span-2 flex justify-center">
+    <div class="w-full max-w-2xl">
+        <label for="description" class="block text-sm font-medium text-gray-700 mb-1 text-center">Description</label>
+        <textarea name="description" id="description" rows="3"
+                  class="w-full pl-3 pr-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="Ajouter une description ou des détails supplémentaires..."></textarea>
+    </div>
+</div>
+
+
             </div>
+
             <!-- Boutons -->
             <div class="mt-6 flex justify-end mr-6 space-x-3">
                 <button type="button"
@@ -754,6 +1284,7 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
         </form>
     </div>
 </div>
+
 
 <!-- Modal suppression -->
 <div id="deleteAbsenceModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
@@ -817,32 +1348,54 @@ echo '<script id="roleUtilisateur" type="application/json">' . json_encode($role
 
 <!-- Modal de rejet -->
 <div id="rejectAbsenceModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-4 sm:p-6 transform transition-all duration-300 scale-95 opacity-0"
-        id="rejectAbsenceModalContent">
-        <div class="border-b px-4 py-3 flex justify-between items-center">
-            <h3 class="text-lg sm:text-xl font-semibold text-gray-800 flex items-center">
-                <i class="fas fa-times-circle mr-2 text-red-500"></i>
-                <span>Confirmer le rejet</span>
-            </h3>
-            <button class="close-modals text-gray-400 hover:text-gray-600 transition-colors">
-                <i class="fas fa-times text-lg"></i>
-            </button>
-        </div>
-        <div class="p-4 sm:p-6">
-            <p class="text-gray-700 text-sm sm:text-base mb-6">Êtes-vous sûr de vouloir rejeter cette demande d'absence ? Cette
-                action est irréversible.</p>
-            <div class="flex justify-end space-x-3">
-                <button type="button"
-                    class="close-modals px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all flex items-center">
-                    <i class="fas fa-times mr-2"></i> Annuler
-                </button>
-                <a id="confirmRejectAbsenceBtn" href="#"
-                    class="px-3 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all flex items-center">
-                    <i class="fas fa-times mr-2"></i> Rejeter
-                </a>
-            </div>
-        </div>
+  <div
+    class="bg-white rounded-lg shadow-2xl w-full max-w-md p-4 sm:p-6 transform transition-all duration-300 scale-95 opacity-0"
+    id="rejectAbsenceModalContent"
+  >
+    <div class="border-b px-4 py-3 flex justify-between items-center">
+      <h3 class="text-lg sm:text-xl font-semibold text-gray-800 flex items-center">
+        <i class="fas fa-times-circle mr-2 text-red-500"></i>
+        <span>Confirmer le rejet</span>
+      </h3>
+      <button class="close-modals text-gray-400 hover:text-gray-600 transition-colors">
+        <i class="fas fa-times text-lg"></i>
+      </button>
     </div>
+
+    <div class="p-4 sm:p-6">
+      <p class="text-gray-700 text-sm sm:text-base mb-4">
+        Êtes-vous sûr de vouloir rejeter cette demande d'absence ? Cette action est irréversible.
+      </p>
+
+      <!-- Champ pour le motif du rejet -->
+      <label for="rejectReason" class="block text-sm font-medium text-gray-700 mb-2">
+        Motif du rejet <span class="text-red-500">*</span>
+      </label>
+      <textarea
+        id="rejectReason"
+        rows="3"
+        class="w-full border rounded-lg p-2 mb-6 focus:ring-2 focus:ring-red-500 focus:outline-none"
+        placeholder="Saisissez le motif du rejet..."
+      ></textarea>
+
+      <div class="flex justify-end space-x-3">
+        <button
+          type="button"
+          class="close-modals px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all flex items-center"
+        >
+          <i class="fas fa-times mr-2"></i> Annuler
+        </button>
+
+        <button
+          id="confirmRejectAbsenceBtn"
+          disabled
+          class="px-3 py-2 text-sm bg-red-600 text-white rounded-lg opacity-50 cursor-not-allowed transition-all flex items-center"
+        >
+          <i class="fas fa-times mr-2"></i> Rejeter
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Modale pour messages de succès/erreur -->
