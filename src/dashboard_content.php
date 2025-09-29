@@ -302,7 +302,7 @@ $agents_absences = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     </div>
 
     <!-- Conteneur scrollable -->
-    <div class="space-y-3 text-sm overflow-y-auto" style="max-height: 500px;">
+    <div class="space-y-3 text-sm overflow-y-auto" style="max-height:300px;">
       <?php if ($nb_absences_longues > 0): ?>
         <?php foreach ($agents_absences as $agent): ?>
           <div class="border border-gray-200 rounded-xl px-3 py-2 shadow-sm hover:shadow transition">
@@ -318,12 +318,14 @@ $agents_absences = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
       <?php endif; ?>
     </div>
 
-    <button
-      id="exportPdfBtn"
-      class="mt-4 self-end px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition font-body"
-    >
-      Exporter en PDF
-    </button>
+  <div style="text-align:center; margin-top: 1rem;">
+  <a href="export_absences.php" target="_blank" 
+     class="px-3 py-1.5 gradient-bg text-white rounded hover:bg-blue-700 transition font-body">
+     Exporter en PDF
+  </a>
+</div>
+
+
 
   </div>
 </div>
