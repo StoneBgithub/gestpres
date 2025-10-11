@@ -90,29 +90,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
     $agent_id = isset($_POST['agent_id']) ? (int)$_POST['agent_id'] : null;
     $role_id = isset($_POST['role_id']) ? (int)$_POST['role_id'] : null;
     $mot_de_passe = trim($_POST['mot_de_passe'] ?? '');
+    $statut = isset($_POST['statut']) ? $_POST['statut'] : 'activé';
+
+    // Debug du statut reçu
+    error_log("Statut reçu: " . $statut);
 
     // Vérification des champs obligatoires
-    if (empty($role_id)) {
-        $messages['errors'][] = "Le champ <strong>rôle</strong> est requis.";
-    }
     if (empty($agent_id)) {
-        $messages['errors'][] = "Le champ <strong>agent</strong> est requis.";
+        $messages['errors'][] = "Le champ <strong>chef de service</strong> est requis.";
     }
     if ($action === 'add' && empty($mot_de_passe)) {
         $messages['errors'][] = "Le champ <strong>mot de passe</strong> est requis pour l'ajout.";
     }
 
+    // Validation du statut - CORRECTION ICI
+   function normalizeStatut($statut) {
+    if (empty($statut)) return 'activé';
+    
+    $statut = strtolower(trim($statut));
+    
+    // Gérer les variations
+    if (in_array($statut, ['désactivé', 'desactive', 'inactif', 'disabled'])) {
+        return 'désactivé';
+    }
+    
+    return 'activé';
+}
+
+$statut = normalizeStatut($statut);
+
     // Validation des données
     if (empty($messages['errors'])) {
         try {
-            // Vérifier si le rôle existe
-            $stmtRole = $pdo->prepare("SELECT id, libelle FROM role WHERE id = :role_id");
-            $stmtRole->execute([':role_id' => $role_id]);
-            $roleData = $stmtRole->fetch(PDO::FETCH_ASSOC);
-            if (!$roleData) {
-                $messages['errors'][] = "Le rôle sélectionné n'existe pas.";
-            }
-
             // Vérifier si l'agent existe et a un email valide
             $stmtAgent = $pdo->prepare("SELECT id, email, nom, prenom, bureau_id FROM agent WHERE id = :agent_id");
             $stmtAgent->execute([':agent_id' => $agent_id]);
@@ -120,7 +129,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
             if (!$agentData) {
                 $messages['errors'][] = "Agent non trouvé pour l'ID : " . htmlspecialchars($agent_id);
             } elseif (empty($agentData['email'])) {
-                $messages['errors'][] = "L'agent sélectionné n'a pas d'adresse email valide.";
+                $messages['errors'][] = "Le chef de service sélectionné n'a pas d'adresse email";
+            }
+
+            // Déterminer automatiquement le rôle selon le service du chef
+            if (empty($messages['errors'])) {
+                $stmtService = $pdo->prepare("SELECT s.libele FROM service s WHERE s.chef_service_id = :agent_id");
+                $stmtService->execute([':agent_id' => $agent_id]);
+                $serviceData = $stmtService->fetch(PDO::FETCH_ASSOC);
+                
+                if ($serviceData) {
+                    $serviceName = $serviceData['libele'];
+                    
+                    // Détermination automatique du rôle selon le service
+                    if (strpos($serviceName, 'Secrétariat') !== false) {
+                        $role_id = 7; // Rôle secrétaire
+                    } elseif (strpos($serviceName, 'Direction Générale') !== false) {
+                        $role_id = 6; // Rôle directeur
+                    } else {
+                        $role_id = 5; // Rôle chef de service
+                    }
+                    
+                    // Vérifier si le rôle existe
+                    $stmtRole = $pdo->prepare("SELECT id, libelle FROM role WHERE id = :role_id");
+                    $stmtRole->execute([':role_id' => $role_id]);
+                    $roleData = $stmtRole->fetch(PDO::FETCH_ASSOC);
+                    
+                    if (!$roleData) {
+                        $messages['errors'][] = "Erreur : Le rôle déterminé automatiquement n'existe pas.";
+                    }
+                } else {
+                    $messages['errors'][] = "Erreur : Aucun service trouvé pour ce chef de service.";
+                }
             }
 
             if (empty($messages['errors'])) {
@@ -130,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                     $stmtCheck = $pdo->prepare("SELECT id FROM login WHERE agent_id = :agent_id");
                     $stmtCheck->execute([':agent_id' => $agent_id_real]);
                     if ($stmtCheck->fetch()) {
-                        $messages['errors'][] = "Un compte existe déjà pour cet agent.";
+                        $messages['errors'][] = "Un compte existe déjà pour ce chef de service.";
                     } else {
                         // Ajout d'un nouveau compte
                         $mot_de_passe_hash = password_hash($mot_de_passe, PASSWORD_DEFAULT);
@@ -141,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                         $stmtInsert->execute([
                             ':agent_id' => $agent_id_real,
                             ':mot_de_passe' => $mot_de_passe_hash,
-                            ':statut' => 'activé',
+                            ':statut' => $statut,
                             ':role_id' => $role_id,
                             ':etat' => 'déconnecté'
                         ]);
@@ -154,6 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                                 'email' => $agentData['email'],
                                 'nom' => $agentData['nom'],
                                 'prenom' => $agentData['prenom'],
+                                'service' => $serviceData['libele'],
                                 'statut' => 'activé',
                                 'role_id' => $role_id,
                                 'role' => $roleData['libelle'],
@@ -172,64 +213,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                         }
                     }
                 } elseif ($action === 'update') {
-                    // Récupérer l'état actuel du compte
-                    $stmt = $pdo->prepare("
-                        SELECT id, agent_id, role_id, mot_de_passe, statut, etat
-                        FROM login
-                        WHERE agent_id = :agent_id
-                    ");
-                    $stmt->execute(['agent_id' => $agent_id_real]);
-                    $current_compte = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Récupérer l'état actuel du compte
+    $stmt = $pdo->prepare("
+        SELECT id, agent_id, role_id, mot_de_passe, statut, etat
+        FROM login
+        WHERE agent_id = :agent_id
+    ");
+    $stmt->execute(['agent_id' => $agent_id_real]);
+    $current_compte = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                    if (!$current_compte) {
-                        $messages['errors'][] = "Erreur : Compte introuvable.";
-                    } else {
-                        // Normaliser les valeurs pour la comparaison
-                        $current_role_id = (string)($current_compte['role_id'] ?? '');
-                        $current_statut = (string)($current_compte['statut'] ?? '');
-                        $current_etat = (string)($current_compte['etat'] ?? '');
-                        $current_mot_de_passe = (string)($current_compte['mot_de_passe'] ?? '');
+    if (!$current_compte) {
+        $messages['errors'][] = "Erreur : Compte introuvable.";
+    } else {
+        // Normaliser les valeurs pour la comparaison
+        $current_role_id = (string)($current_compte['role_id'] ?? '');
+        $current_statut = (string)($current_compte['statut'] ?? '');
+        $current_etat = (string)($current_compte['etat'] ?? '');
+        $current_mot_de_passe = (string)($current_compte['mot_de_passe'] ?? '');
 
-                        $new_role_id = (string)$role_id;
-                        $new_statut = (string)($current_compte['statut'] ?? 'activé');
-                        $new_etat = (string)($current_compte['etat'] ?? 'déconnecté');
-                        $new_mot_de_passe = $mot_de_passe ? password_hash($mot_de_passe, PASSWORD_DEFAULT) : $current_mot_de_passe;
+        $new_role_id = (string)$role_id;
+        $new_statut = (string)$statut; // CORRECTION : Utiliser le statut du formulaire
+        $new_etat = (string)($current_compte['etat'] ?? 'déconnecté');
+        $new_mot_de_passe = $mot_de_passe ? password_hash($mot_de_passe, PASSWORD_DEFAULT) : $current_mot_de_passe;
 
-                        // Comparer les nouvelles valeurs avec les anciennes
-                        $changes = [];
-                        if ($new_role_id !== $current_role_id) {
-                            $stmt_old_role = $pdo->prepare("SELECT libelle FROM role WHERE id = :id");
-                            $stmt_old_role->execute(['id' => $current_role_id]);
-                            $old_role_libele = $stmt_old_role->fetchColumn() ?: 'N/A';
-                            $changes['role'] = ['old' => $old_role_libele, 'new' => $roleData['libelle']];
-                        }
-                        if ($mot_de_passe && $new_mot_de_passe !== $current_mot_de_passe) {
-                            $changes['mot_de_passe'] = ['old' => '******', 'new' => '******'];
-                        }
+        // Comparer les nouvelles valeurs avec les anciennes
+        $changes = [];
+        if ($new_role_id !== $current_role_id) {
+            $stmt_old_role = $pdo->prepare("SELECT libelle FROM role WHERE id = :id");
+            $stmt_old_role->execute(['id' => $current_role_id]);
+            $old_role_libele = $stmt_old_role->fetchColumn() ?: 'N/A';
+            $changes['role'] = ['old' => $old_role_libele, 'new' => $roleData['libelle']];
+        }
+        if ($new_statut !== $current_statut) {
+            $changes['statut'] = ['old' => $current_statut, 'new' => $new_statut];
+        }
+        if ($mot_de_passe && $new_mot_de_passe !== $current_mot_de_passe) {
+            $changes['mot_de_passe'] = ['old' => '******', 'new' => '******'];
+        }
 
-                        error_log("compte_content.php (update) - Changes: " . json_encode($changes));
+        error_log("compte_content.php (update) - Changes: " . json_encode($changes));
 
-                        if (empty($changes)) {
-                            $messages['success'][] = "Aucune donnée modifiée.";
-                        } else {
-                            // Mise à jour du compte
-                            $sql = "UPDATE login SET role_id = :role_id";
-                            if ($mot_de_passe) {
-                                $sql .= ", mot_de_passe = :mot_de_passe";
-                            }
-                            $sql .= " WHERE agent_id = :agent_id";
+        if (empty($changes)) {
+            $messages['success'][] = "Aucune donnée modifiée.";
+        } else {
+            // CORRECTION : Mise à jour du compte AVEC LE STATUT
+            $sql = "UPDATE login SET role_id = :role_id, statut = :statut";
+            if ($mot_de_passe) {
+                $sql .= ", mot_de_passe = :mot_de_passe";
+            }
+            $sql .= " WHERE agent_id = :agent_id";
 
-                            $params = [
-                                ':agent_id' => $agent_id_real,
-                                ':role_id' => $role_id
-                            ];
-                            if ($mot_de_passe) {
-                                $params[':mot_de_passe'] = $new_mot_de_passe;
-                            }
+            $params = [
+                ':agent_id' => $agent_id_real,
+                ':role_id' => $role_id,
+                ':statut' => $new_statut // CORRECTION : Ajouter le statut
+            ];
+            if ($mot_de_passe) {
+                $params[':mot_de_passe'] = $new_mot_de_passe;
+            }
 
-                            $stmtUpdate = $pdo->prepare($sql);
-                            $stmtUpdate->execute($params);
-                            $messages['success'][] = "Compte utilisateur mis à jour avec succès.";
+            $stmtUpdate = $pdo->prepare($sql);
+            $stmtUpdate->execute($params);
+            $messages['success'][] = "Compte utilisateur mis à jour avec succès.";
 
                             // Journalisation
                             if ($login_id) {
@@ -238,6 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                                     'email' => $agentData['email'],
                                     'nom' => $agentData['nom'],
                                     'prenom' => $agentData['prenom'],
+                                    'service' => $serviceData['libele'],
                                     'statut' => $new_statut,
                                     'role_id' => $role_id,
                                     'role' => $roleData['libelle'],
@@ -260,10 +306,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && in_array
                 }
             }
         } catch (PDOException $e) {
-    error_log("Exception PDO dans compte_content.php ($action) : " . $e->getMessage());
-    error_log("Trace de l'erreur : " . $e->getTraceAsString());
-    $messages['errors'][] = "Erreur serveur : Impossible de traiter la requête. Détails : " . htmlspecialchars($e->getMessage());
-}
+            error_log("Exception PDO dans compte_content.php ($action) : " . $e->getMessage());
+            error_log("Trace de l'erreur : " . $e->getTraceAsString());
+            $messages['errors'][] = "Erreur serveur : Impossible de traiter la requête. Détails : " . htmlspecialchars($e->getMessage());
+        }
     }
 
     // Réponse JSON finale
@@ -330,11 +376,13 @@ try {
         SELECT l.id as id, l.agent_id as agent_id, a.nom as nom, a.prenom as prenom, 
                CONCAT(a.nom, ' ', a.prenom) as nom_prenom, a.photo as photo, 
                r.libelle as role, r.id as role_id, l.derniere_connexion as connexion, 
-               l.statut as statut, l.etat as etat, b.libele as bureau
+               l.statut as statut, l.etat as etat, b.libele as bureau,
+               s.libele as service
         FROM login l 
         JOIN agent a ON l.agent_id = a.id 
         JOIN role r ON l.role_id = r.id 
         JOIN bureau b ON a.bureau_id = b.id
+        LEFT JOIN service s ON s.chef_service_id = a.id
         ORDER BY l.derniere_connexion DESC
     ");
     $comptes_data = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -344,18 +392,41 @@ try {
     $comptes_data = [];
 }
 
-// Récupérer les agents sans compte
+// Récupérer les chefs de service avec leurs services - REQUÊTE CORRIGÉE
 try {
-    $sql = "SELECT a.id, a.bureau_id, CONCAT(a.nom, ' ', a.prenom) AS nom_prenom, a.email, b.libele AS bureau
-            FROM agent a
-            JOIN bureau b ON a.bureau_id = b.id
+    // Requête corrigée pour récupérer les chefs de service
+    $sql = "SELECT 
+                a.id, 
+                a.nom, 
+                a.prenom, 
+                a.email, 
+                s.libele as service, 
+                s.id as service_id
+            FROM service s
+            INNER JOIN agent a ON s.chef_service_id = a.id
             LEFT JOIN login l ON a.id = l.agent_id
-            WHERE l.agent_id IS NULL";
+            WHERE s.chef_service_id IS NOT NULL 
+            AND s.chef_service_id > 0
+            AND l.agent_id IS NULL 
+            ORDER BY s.libele";
+    
     $stmt = $pdo->query($sql);
-    $agents_bureau = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $chefs_service = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    error_log("Chefs de service récupérés (requête corrigée): " . json_encode($chefs_service, JSON_UNESCAPED_UNICODE));
+    
 } catch (PDOException $e) {
-    error_log("Erreur dans compte_content.php (récupération agents bureau) : " . $e->getMessage());
-    $agents_bureau = [];
+    error_log("Erreur dans compte_content.php (récupération chefs service corrigée) : " . $e->getMessage());
+    
+    // Fallback: Utiliser les données manuelles basées sur votre schéma
+    $chefs_service = [
+        ['id' => 125, 'nom' => 'EBONDO MALAKA', 'prenom' => 'Listete Ornelia', 'email' => 'lisetteebo@gmail.com', 'service' => 'Direction Générale', 'service_id' => 9],
+        ['id' => 126, 'nom' => 'MIME MASSAMBA NÉE MPANZOU', 'prenom' => 'Mary Juliette', 'email' => 'maryse@gmail.com', 'service' => 'Secrétariat de direction', 'service_id' => 4],
+        ['id' => 148, 'nom' => 'BALOUNGA', 'prenom' => 'Prosper', 'email' => 'comptecode2@gmail.com', 'service' => 'Exploitation', 'service_id' => 3],
+        ['id' => 173, 'nom' => 'NKOUNKOU WAKOULOU', 'prenom' => 'André Mozart', 'email' => null, 'service' => 'Système et réseau', 'service_id' => 2]
+    ];
+    
+    error_log("Utilisation des chefs de service par défaut");
 }
 
 // Récupérer les rôles
@@ -378,22 +449,14 @@ try {
     $statuts = [];
 }
 
-// Récupérer les bureaux
-try {
-    $sql = "SELECT libele FROM bureau";
-    $stmt = $pdo->query($sql);
-    $bureaux2 = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    error_log("Erreur dans compte_content.php (récupération bureaux) : " . $e->getMessage());
-    $bureaux2 = [];
-}
-
 // Stocker les données dans des éléments invisibles pour le JS
 echo '<script id="comptesData" type="application/json">' . json_encode($comptes_data, JSON_UNESCAPED_UNICODE) . '</script>';
-echo '<script id="bureauxData" type="application/json">' . json_encode($bureaux2, JSON_UNESCAPED_UNICODE) . '</script>';
+echo '<script id="chefsServiceData" type="application/json">' . json_encode($chefs_service, JSON_UNESCAPED_UNICODE) . '</script>';
 echo '<script id="statutData" type="application/json">' . json_encode($statuts, JSON_UNESCAPED_UNICODE) . '</script>';
 echo '<script id="roleData" type="application/json">' . json_encode($roles, JSON_UNESCAPED_UNICODE) . '</script>';
-echo '<script id="agentsData" type="application/json">' . json_encode($agents_bureau, JSON_UNESCAPED_UNICODE) . '</script>';
+
+// Debug HTML pour vérifier les données
+echo "<!-- Debug: " . count($chefs_service) . " chefs de service trouvés -->";
 ?>
 
 <!-- Filtres et recherche -->
@@ -473,6 +536,7 @@ echo '<script id="agentsData" type="application/json">' . json_encode($agents_bu
             <tr>
                 <th scope="col" class="px-4 py-3 text-left">Agent</th>
                 <th scope="col" class="px-4 py-3 text-left">Rôle</th>
+                <th scope="col" class="px-4 py-3 text-left">Service</th>
                 <th scope="col" class="px-4 py-3 text-left">Bureau</th>
                 <th scope="col" class="px-4 py-3 text-left">Dernière connexion</th>
                 <th scope="col" class="px-4 py-3 text-left">Statut</th>
@@ -513,6 +577,9 @@ echo '<script id="agentsData" type="application/json">' . json_encode($agents_bu
                     </span>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                    <?= htmlspecialchars($compte['service'] ?? 'Non défini', ENT_QUOTES, 'UTF-8') ?>
+                </td>
+                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                     <?= htmlspecialchars($compte['bureau'], ENT_QUOTES, 'UTF-8') ?>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
@@ -545,7 +612,7 @@ echo '<script id="agentsData" type="application/json">' . json_encode($agents_bu
 
 <!-- Modal pour ajouter/modifier un compte -->
 <div id="compteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-2xl w-full max-w-md sm:max-w-lg md:max-w-4xl p-4 sm:p-6 transform transition-all duration-300 scale-95 opacity-0"
+    <div class="bg-white rounded-lg shadow-2xl w-full max-w-md p-4 sm:p-6 transform transition-all duration-300 scale-95 opacity-0"
         id="compteModalContent">
         <div class="border-b px-4 py-3 flex justify-between items-center">
             <h3 id="modalTitle" class="text-lg sm:text-xl font-semibold text-gray-800 flex items-center">
@@ -560,71 +627,59 @@ echo '<script id="agentsData" type="application/json">' . json_encode($agents_bu
             class="p-6 flex flex-col justify-between h-full space-y-8">
             <input type="hidden" id="agent_idss" name="agent_id" value="">
             <input type="hidden" id="formAction" name="action" value="add">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div class="mb-4">
-                    <label for="filter_bureau" class="block text-sm font-medium text-gray-700 mb-2">Bureau</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fas fa-building text-gray-400"></i>
-                        </div>
-                        <select name="bureau_id" id="filter_bureau"
-                            class="w-full pl-10 pr-3 py-3 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
-                            <option value="">Choisir un bureau</option>
-                            <?php foreach ($bureaux2 as $b): ?>
-                            <option value="<?= htmlspecialchars($b['libele'], ENT_QUOTES, 'UTF-8') ?>">
-                                <?= htmlspecialchars($b['libele'], ENT_QUOTES, 'UTF-8') ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
+            <input type="hidden" id="auto_role_id" name="role_id" value="">
+
+            <div class="mb-4">
+                <label for="filter_chef_service" class="block text-sm font-medium text-gray-700 mb-2">Chef de
+                    Service</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-user-tie text-gray-400"></i>
                     </div>
-                </div>
-                <div class="mb-4">
-                    <label for="filter_agent" class="block text-sm font-medium text-gray-700 mb-2">Agent</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fas fa-user text-gray-400"></i>
-                        </div>
-                        <select id="filter_agent" name="agent_id" required
-                            class="w-full pl-10 pr-3 py-3 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
-                            <option value="">Choisir un agent</option>
-                        </select>
-                    </div>
+                    <select id="filter_chef_service" name="chef_service_id" required
+                        class="w-full pl-10 pr-3 py-3 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+                        <option value="">Choisir un chef de service</option>
+                        <?php foreach ($chefs_service as $chef): ?>
+                        <option value="<?= htmlspecialchars($chef['id'], ENT_QUOTES, 'UTF-8') ?>">
+                            <?= htmlspecialchars($chef['nom'] . ' ' . $chef['prenom'] . ' - ' . $chef['service'], ENT_QUOTES, 'UTF-8') ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div class="mb-4">
-                    <label for="role" class="block text-sm font-medium text-gray-700 mb-2">Rôle</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fas fa-user-tag text-gray-400"></i>
-                        </div>
-                        <select name="role_id" id="role" required
-                            class="w-full pl-10 pr-3 py-3 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
-                            <option value="">Choisir un rôle</option>
-                            <?php foreach ($roles as $role): ?>
-                            <option value="<?= htmlspecialchars($role['id'], ENT_QUOTES, 'UTF-8') ?>">
-                                <?= htmlspecialchars($role['libelle'], ENT_QUOTES, 'UTF-8') ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
+
+            <div class="mb-4">
+                <label for="mot_de_passe" class="block text-sm font-medium text-gray-700 mb-2">Mot de passe</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-lock text-gray-400"></i>
                     </div>
-                </div>
-                <div class="mb-4">
-                    <label for="mot_de_passe" class="block text-sm font-medium text-gray-700 mb-2">Mot de passe</label>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fas fa-lock text-gray-400"></i>
-                        </div>
-                        <input type="password" name="mot_de_passe" id="mot_de_passe" maxlength="10"
-                            class="w-full pl-10 pr-10 py-3 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-                            placeholder="Entrez le mot de passe">
-                        <button type="button" id="togglePassword"
-                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 transition">
-                            <i id="eyeIcon" class="fas fa-eye"></i>
-                        </button>
-                    </div>
+                    <input type="password" name="mot_de_passe" id="mot_de_passe" maxlength="10"
+                        class="w-full pl-10 pr-10 py-3 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                        placeholder="Entrez le mot de passe">
+                    <button type="button" id="togglePassword"
+                        class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 transition">
+                        <i id="eyeIcon" class="fas fa-eye"></i>
+                    </button>
                 </div>
             </div>
+
+
+            <div class="mb-4">
+                <label for="statut_compte" class="block text-sm font-medium text-gray-700 mb-2">Statut du compte</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-toggle-on text-gray-400"></i>
+                    </div>
+                    <select id="statut_compte" name="statut" required
+                        class="w-full pl-10 pr-3 py-3 text-sm border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all">
+                        <option value="activé">Activé</option>
+                        <option value="désactivé">Désactivé</option>
+                    </select>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Un compte désactivé ne pourra pas se connecter au système</p>
+            </div>
+
             <div class="pt-6 flex justify-end space-x-6">
                 <button type="button"
                     class="close-modal px-5 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500">

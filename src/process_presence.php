@@ -5,6 +5,19 @@ date_default_timezone_set('Africa/Brazzaville');
 // Configurer les en-têtes pour autoriser les requêtes AJAX
 header('Content-Type: application/json');
 
+
+
+// Vérifier l'heure actuelle pour les scans QR (si pas de presence_time fournie)
+$currentHour = (int) date('H'); // Format 24h, ex: 14 pour 14h
+if (!isset($_POST['presence_time']) && ($currentHour >= 10 || $currentHour < 7)) {
+    http_response_code(403); // Forbidden
+    echo json_encode([
+        'success' => false,
+        'message' => 'Les scans sont interdits entre 10h00 et 07h00 le lendemain matin.'
+    ]);
+    exit;
+}
+
 // Connexion à la base de données
 $servername = "localhost";
 $username = "root";
@@ -34,6 +47,19 @@ try {
         }
         if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $presenceTime)) {
             echo json_encode(['success' => false, 'message' => "Format d'heure invalide"]);
+            exit;
+        }
+    }
+
+
+      // Vérifier l'heure fournie pour le mode manuel
+    if (isset($_POST['presence_time'])) {
+        $selectedHour = (int) explode(':', $presenceTime)[0];
+        if ($selectedHour >= 10 || $selectedHour < 7) {
+            echo json_encode([
+                'success' => false,
+                'message' => 'Les heures sélectionnées doivent être entre 07h00 et 10h59.'
+            ]);
             exit;
         }
     }

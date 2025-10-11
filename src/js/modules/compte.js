@@ -1,8 +1,8 @@
 import { eventBus } from "../config.js";
 
-// Liste des comptes, agents, bureaux, rôles et statuts
+// Liste des comptes, chefs de service, bureaux, rôles et statuts
 let comptes = [];
-let agents = [];
+let chefsService = [];
 let bureaux = [];
 let roles = [];
 let statuts = [];
@@ -21,11 +21,94 @@ function getInitialsCircle(name) {
   return `<div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center"><span class="text-blue-600 font-medium text-xs">${initials}</span></div>`;
 }
 
+// Fonction pour obtenir la classe CSS selon le statut
+function getStatutClass(statut) {
+  // Normaliser le statut pour éviter les problèmes de casse
+  const statutNormalise = statut ? statut.toLowerCase() : "";
+
+  switch (statutNormalise) {
+    case "activé":
+    case "active": // Au cas où
+      return "bg-green-100 text-green-800";
+    case "désactivé":
+    case "desactive": // Au cas où
+    case "désactive": // Au cas où
+      return "bg-red-100 text-red-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+}
+
+// Fonction pour normaliser les valeurs de statut
+function normalizeStatut(statut) {
+  if (!statut) return "activé";
+
+  const statutStr = String(statut).toLowerCase().trim();
+
+  // Gérer les différentes variations possibles
+  if (
+    statutStr === "désactivé" ||
+    statutStr === "desactive" ||
+    statutStr === "inactif"
+  ) {
+    return "désactivé";
+  }
+
+  return "activé"; // Valeur par défaut
+}
+
+// Fonction pour obtenir l'icône selon le statut
+function getStatutIcon(statut) {
+  // Normaliser le statut pour éviter les problèmes de casse
+  const statutNormalise = statut ? statut.toLowerCase() : "";
+
+  switch (statutNormalise) {
+    case "activé":
+    case "active":
+      return "";
+    case "désactivé":
+    case "desactive":
+    case "désactive":
+      return "";
+    default:
+      return "❓";
+  }
+}
+
+// Fonction pour obtenir le texte du statut
+function getStatutText(statut) {
+  // Normaliser le statut pour éviter les problèmes de casse
+  const statutNormalise = statut ? statut.toLowerCase() : "";
+
+  switch (statutNormalise) {
+    case "activé":
+    case "active":
+      return "Activé";
+    case "désactivé":
+    case "desactive":
+    case "désactive":
+      return "Désactivé";
+    default:
+      return statut || "Non défini";
+  }
+}
+
 // Fonction d'initialisation principale
 export function init() {
   console.log("Initialisation du module de gestion des comptes");
+
+  // Debug
+  console.log(
+    "Élément chefsServiceData:",
+    document.getElementById("chefsServiceData")
+  );
+
   loadComptesData();
-  loadAgentsData();
+  loadChefsServiceData();
+
+  // Debug après chargement
+  console.log("Chefs de service chargés:", chefsService);
+
   loadBureauxData();
   loadRolesData();
   loadStatutsData();
@@ -34,6 +117,7 @@ export function init() {
   setupFilters();
   checkAndShowMessageModal();
   setupPasswordToggle();
+  populateChefsServiceSelect();
 }
 
 // Charger les données des comptes
@@ -65,17 +149,19 @@ function loadComptesData() {
   }
 }
 
-// Charger les données des agents
-function loadAgentsData() {
-  const agentsDataElement = document.getElementById("agentsData");
-  if (agentsDataElement) {
+// Charger les données des chefs de service
+function loadChefsServiceData() {
+  const chefsServiceDataElement = document.getElementById("chefsServiceData");
+  if (chefsServiceDataElement) {
     try {
-      agents = JSON.parse(agentsDataElement.textContent);
-      console.log(`${agents.length} agents chargés`);
+      chefsService = JSON.parse(chefsServiceDataElement.textContent);
+      console.log(`${chefsService.length} chefs de service chargés`);
     } catch (e) {
-      console.error("Erreur lors du parsing des données agents:", e);
-      agents = [];
+      console.error("Erreur lors du parsing des données chefs service:", e);
+      chefsService = [];
     }
+  } else {
+    console.warn("Élément chefsServiceData non trouvé");
   }
 }
 
@@ -119,6 +205,47 @@ function loadStatutsData() {
       statuts = [];
     }
   }
+}
+
+// Remplir le sélecteur des chefs de service
+function populateChefsServiceSelect() {
+  const chefServiceSelect = document.getElementById("filter_chef_service");
+  if (!chefServiceSelect) {
+    console.error("Élément filter_chef_service non trouvé");
+    return;
+  }
+
+  chefServiceSelect.innerHTML =
+    '<option value="">Choisir un chef de service</option>';
+
+  if (chefsService.length === 0) {
+    console.warn("Aucun chef de service disponible");
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Aucun chef de service disponible";
+    chefServiceSelect.appendChild(option);
+    return;
+  }
+
+  console.log(
+    `Remplissage du sélecteur avec ${chefsService.length} chefs de service`
+  );
+
+  chefsService.forEach((chef) => {
+    const option = document.createElement("option");
+    option.value = chef.id;
+
+    // Format: "Nom Prénom - Service"
+    let displayText = `${chef.nom} ${chef.prenom}`;
+    if (chef.service) {
+      displayText += ` - ${chef.service}`;
+    }
+
+    option.textContent = displayText;
+    option.dataset.service = chef.service || "";
+    option.dataset.serviceId = chef.service_id || "";
+    chefServiceSelect.appendChild(option);
+  });
 }
 
 // Vérifier et afficher messageModal si des messages sont présents
@@ -206,56 +333,59 @@ function setupListeners() {
     }
   });
 
-  // Gestion du sélecteur de bureau pour mettre à jour les agents
-  const modalBureauSelect = document.getElementById("filter_bureau");
-  if (modalBureauSelect) {
-    modalBureauSelect.addEventListener("change", function () {
-      updateModalAgentsOptions(this.value);
-    });
-  }
-
-  // Gestion de la sélection d'agent pour mettre à jour agent_idss
-  const agentSelect = document.getElementById("filter_agent");
+  // Gestion du sélecteur de chef de service pour déterminer automatiquement le rôle
+  const chefServiceSelect = document.getElementById("filter_chef_service");
+  const roleIdInput = document.getElementById("auto_role_id");
   const agentIdInput = document.getElementById("agent_idss");
-  if (agentSelect && agentIdInput) {
-    const newAgentSelect = agentSelect.cloneNode(true);
-    agentSelect.parentNode.replaceChild(newAgentSelect, agentSelect);
-    newAgentSelect.addEventListener("change", function () {
-      agentIdInput.value = this.value;
-      console.log("Agent sélectionné, agent_idss mis à jour:", this.value);
+
+  if (chefServiceSelect && roleIdInput && agentIdInput) {
+    chefServiceSelect.addEventListener("change", function () {
+      const selectedOption = this.options[this.selectedIndex];
+      if (selectedOption && selectedOption.dataset.service) {
+        const serviceName = selectedOption.dataset.service;
+        let roleId;
+
+        // Déterminer le rôle automatiquement selon le service
+        if (serviceName.includes("Secrétariat")) {
+          roleId = 7; // Rôle secrétaire
+        } else if (serviceName.includes("Direction Générale")) {
+          roleId = 6; // Rôle directeur
+        } else {
+          roleId = 5; // Rôle chef de service
+        }
+
+        roleIdInput.value = roleId;
+        agentIdInput.value = this.value;
+        console.log(
+          `Chef de service sélectionné: ${this.value}, Service: ${serviceName}, Rôle auto-assigné: ${roleId}`
+        );
+      }
     });
   }
 
-  // Soumission du formulaire via AJAX - VERSION CORRIGÉE
+  // Soumission du formulaire via AJAX
   const compteForm = document.getElementById("compteForm");
   if (compteForm) {
     compteForm.addEventListener("submit", function (e) {
       e.preventDefault();
       console.log("Soumission du formulaire déclenchée");
 
-      const bureauSelect = document.getElementById("filter_bureau");
-      const agentSelect = document.getElementById("filter_agent");
-      const roleSelect = document.getElementById("role");
+      const chefServiceSelect = document.getElementById("filter_chef_service");
       const passwordInput = document.getElementById("mot_de_passe");
+      const roleIdInput = document.getElementById("auto_role_id");
       const agentIdInput = document.getElementById("agent_idss");
       const action = document.getElementById("formAction").value;
 
       // Validation côté client
       let errors = [];
-      if (
-        !agentSelect ||
-        !agentSelect.value ||
-        agentSelect.value === "Aucun agent sans compte"
-      ) {
-        errors.push(
-          "Le champ agent est requis. Veuillez sélectionner un agent valide."
-        );
-      }
-      if (!roleSelect || !roleSelect.value) {
-        errors.push("Le champ rôle est requis.");
+      if (!chefServiceSelect || !chefServiceSelect.value) {
+        errors.push("Le champ chef de service est requis.");
       }
       if (action === "add" && (!passwordInput || !passwordInput.value)) {
         errors.push("Le champ mot de passe est requis pour l'ajout.");
+      }
+      if (!roleIdInput.value) {
+        errors.push("Erreur : Aucun rôle n'a été déterminé automatiquement.");
       }
 
       if (errors.length > 0) {
@@ -266,8 +396,21 @@ function setupListeners() {
 
       const formData = new FormData();
       formData.append("action", action);
-      formData.append("agent_id", agentSelect.value);
-      formData.append("role_id", roleSelect.value);
+      formData.append("agent_id", chefServiceSelect.value);
+      formData.append("role_id", roleIdInput.value);
+
+      const statutSelect = document.getElementById("statut_compte");
+      if (statutSelect) {
+        const selectedStatut = normalizeStatut(statutSelect.value);
+        formData.append("statut", selectedStatut);
+        console.log("Statut sélectionné:", selectedStatut); // Pour debug
+      } else {
+        formData.append("statut", "activé"); // Valeur par défaut
+        console.warn(
+          "Sélecteur de statut non trouvé, utilisation de la valeur par défaut"
+        );
+      }
+
       if (passwordInput && passwordInput.value) {
         formData.append("mot_de_passe", passwordInput.value);
       }
@@ -287,13 +430,13 @@ function setupListeners() {
           '<i class="fas fa-spinner fa-spin mr-2"></i> Traitement...';
       }
 
-      // Requête AJAX corrigée
+      // Requête AJAX
       fetch("./compte_content.php", {
         method: "POST",
         body: formData,
         credentials: "same-origin",
         headers: {
-          "X-Requested-With": "XMLHttpRequest", // Assurer que la requête est marquée comme AJAX
+          "X-Requested-With": "XMLHttpRequest",
         },
       })
         .then((response) => {
@@ -373,42 +516,6 @@ function setupListeners() {
   }
 }
 
-// Mettre à jour les options des agents selon le bureau - VERSION CORRIGÉE
-function updateModalAgentsOptions(bureauLibelle) {
-  const agentSelect = document.getElementById("filter_agent");
-  const agentIdInput = document.getElementById("agent_idss");
-  if (!agentSelect || !agentIdInput) return;
-
-  agentSelect.innerHTML = '<option value="">Choisir un agent</option>';
-  agentIdInput.value = "";
-
-  if (bureauLibelle) {
-    const agentsDuBureau = agents.filter(
-      (agent) => agent.bureau === bureauLibelle
-    );
-
-    console.log("Agents du bureau sélectionné:", agentsDuBureau);
-
-    if (agentsDuBureau.length > 0) {
-      agentsDuBureau.forEach((agent) => {
-        const option = document.createElement("option");
-        option.value = agent.id;
-        option.textContent = agent.nom_prenom;
-        agentSelect.appendChild(option);
-      });
-      agentSelect.disabled = false;
-    } else {
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = "Aucun agent sans compte";
-      agentSelect.appendChild(option);
-      agentSelect.disabled = true;
-    }
-  } else {
-    agentSelect.disabled = true;
-  }
-}
-
 // Ouvre le modal d'ajout de compte
 export function addCompte() {
   const modal = document.getElementById("compteModal");
@@ -422,19 +529,21 @@ export function addCompte() {
     form.reset();
     document.getElementById("agent_idss").value = "";
     document.getElementById("formAction").value = "add";
+    document.getElementById("auto_role_id").value = "";
     document.getElementById("mot_de_passe").value = "";
     document.getElementById("mot_de_passe").placeholder =
       "Entrez le mot de passe";
     document.getElementById("mot_de_passe").required = true;
 
-    const agentSelect = document.getElementById("filter_agent");
-    const bureauSelect = document.getElementById("filter_bureau");
-    if (agentSelect) {
-      agentSelect.disabled = true;
-      agentSelect.innerHTML = '<option value="">Choisir un agent</option>';
+    const statutSelect = document.getElementById("statut_compte");
+    if (statutSelect) {
+      statutSelect.value = "activé";
     }
-    if (bureauSelect) {
-      bureauSelect.value = "";
+
+    const chefServiceSelect = document.getElementById("filter_chef_service");
+    if (chefServiceSelect) {
+      chefServiceSelect.disabled = false;
+      chefServiceSelect.value = "";
     }
   }
 
@@ -467,29 +576,40 @@ export function editCompte(compteId) {
   // Remplir les champs
   document.getElementById("agent_idss").value = compte.agent_id || "";
   document.getElementById("formAction").value = "update";
-  document.getElementById("role").value = compte.role_id || "";
+  document.getElementById("auto_role_id").value = compte.role_id || "";
   document.getElementById("mot_de_passe").value = "";
   document.getElementById("mot_de_passe").placeholder =
     "Nouveau mot de passe (optionnel)";
   document.getElementById("mot_de_passe").required = false;
 
-  // Gérer la sélection du bureau et de l'agent
-  const bureauSelect = document.getElementById("filter_bureau");
-  const agentSelect = document.getElementById("filter_agent");
+  const statutSelect = document.getElementById("statut_compte");
+  if (statutSelect) {
+    statutSelect.value = compte.statut || "activé";
+    console.log("Statut chargé pour édition:", compte.statut);
+  }
 
-  if (bureauSelect && agentSelect) {
-    // Pré-remplir bureau (libele du bureau)
-    bureauSelect.value = compte.bureau || "";
-    bureauSelect.disabled = true; // Griser le bureau
+  // Pré-sélectionner le chef de service
+  const chefServiceSelect = document.getElementById("filter_chef_service");
+  if (chefServiceSelect) {
+    // Vider le select
+    chefServiceSelect.innerHTML =
+      '<option value="">Choisir un chef de service</option>';
 
-    // Pré-remplir agent : vider les options et ajouter seulement l'agent actuel
-    agentSelect.innerHTML = ""; // Vider les options
+    // Créer une option avec le nom et service du chef
     const option = document.createElement("option");
     option.value = compte.agent_id;
-    option.textContent = compte.nom_prenom || "Agent inconnu";
-    agentSelect.appendChild(option);
-    agentSelect.value = compte.agent_id;
-    agentSelect.disabled = true; // Griser l'agent
+
+    // Afficher "Nom Prénom - Service" au lieu de l'ID
+    const displayText = `${compte.nom} ${compte.prenom} - ${
+      compte.service || "Service non défini"
+    }`;
+    option.textContent = displayText;
+
+    chefServiceSelect.appendChild(option);
+    chefServiceSelect.value = compte.agent_id;
+    chefServiceSelect.disabled = true; // Grisé en mode édition
+
+    console.log("Chef de service affiché:", displayText);
   }
 
   passwordToggleInitialized = false;
@@ -524,7 +644,7 @@ export function confirmDelete(compteId) {
   showModal("deleteModal");
 }
 
-// Exécute la suppression via AJAX - VERSION CORRIGÉE
+// Exécute la suppression via AJAX
 function performDelete(compteId) {
   const formData = new FormData();
   formData.append("action", "delete");
@@ -537,7 +657,7 @@ function performDelete(compteId) {
     body: formData,
     credentials: "same-origin",
     headers: {
-      "X-Requested-With": "XMLHttpRequest", // Assurer que la requête est marquée comme AJAX
+      "X-Requested-With": "XMLHttpRequest",
     },
   })
     .then((response) => {
@@ -725,6 +845,8 @@ function setupFilters() {
         : "";
       const matchesSearch = nomPrenom.includes(searchQuery);
       const matchesRole = roleFilter === "" || compte.role === roleFilter;
+
+      // CORRECTION : Comparer directement avec la valeur de la base de données
       const matchesStatut =
         statutFilter === "" || compte.statut === statutFilter;
 
@@ -734,89 +856,94 @@ function setupFilters() {
     comptesTableBody.innerHTML =
       filteredComptes.length === 0
         ? `
-            <tr>
-                <td colspan="7" class="px-4 py-6 text-center">
-                    <div class="flex flex-col items-center justify-center p-6 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl shadow-sm animate-fade-in">
-                        <i class="fas fa-search text-4xl text-indigo-500 mb-4 animate-pulse"></i>
-                        <h3 class="text-lg font-semibold text-gray-800 mb-2">Oups, aucun compte trouvé !</h3>
-                        <p class="text-sm text-gray-600">Essayez une autre recherche.</p>
-                    </div>
-                </td>
-            </tr>
-        `
+          <tr>
+              <td colspan="8" class="px-4 py-6 text-center">
+                  <div class="flex flex-col items-center justify-center p-6 bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl shadow-sm animate-fade-in">
+                      <i class="fas fa-search text-4xl text-indigo-500 mb-4 animate-pulse"></i>
+                      <h3 class="text-lg font-semibold text-gray-800 mb-2">Oups, aucun compte trouvé !</h3>
+                      <p class="text-sm text-gray-600">Essayez une autre recherche.</p>
+                  </div>
+              </td>
+          </tr>
+      `
         : filteredComptes
             .map((compte) => {
-              const statutClass =
-                compte.statut === "activé"
-                  ? "bg-green-100 text-green-800"
-                  : "bg-red-100 text-red-800";
+              // APPEL DES FONCTIONS UTILITAIRES
+              const statutClass = getStatutClass(compte.statut);
+              const statutIcon = getStatutIcon(compte.statut);
+              const statutText = getStatutText(compte.statut);
+
               return `
-                <tr class="hover:bg-gray-50 transition-colors">
-                    <td class="px-4 py-3 whitespace-nowrap">
-                        <div class="flex items-center">
-                            <div class="h-10 w-10 rounded-full flex items-center justify-center mr-3 border">
-                                ${
-                                  compte.photo &&
-                                  compte.photo !== "NULL" &&
-                                  compte.photo !== ""
-                                    ? `<img src="${compte.photo}" alt="${
-                                        compte.nom_prenom || "Utilisateur"
-                                      }" class="rounded-full object-cover" onerror="this.parentNode.innerHTML = '${getInitialsCircle(
-                                        compte.nom_prenom || ""
-                                      ).replace(/'/g, "\\'")}';"/>`
-                                    : getInitialsCircle(compte.nom_prenom || "")
-                                }
-                            </div>
-                            <div>
-                                <div class="text-sm font-medium text-gray-900">${
-                                  compte.nom_prenom || "Nom inconnu"
-                                }</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">${
-                          compte.role || "Non défini"
-                        }</span>
-                    </td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${
-                      compte.bureau || "Non défini"
-                    }</td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${
-                      compte.connexion
-                        ? new Date(compte.connexion).toLocaleString("fr-FR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "Jamais"
-                    }</td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statutClass}">${
-                compte.statut || "Non défini"
-              }</span>
-                    </td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${
-                      compte.etat || "Non défini"
-                    }</td>
-                    <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                        <div class="flex space-x-2 justify-end">
-                            <button class="edit-compte-btn text-blue-600 hover:text-blue-900 transition-colors" data-id="${
-                              compte.id
-                            }" title="Modifier">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="delete-compte-btn text-red-600 hover:text-red-900 transition-colors" data-id="${
-                              compte.id
-                            }" title="Supprimer">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `;
+              <tr class="hover:bg-gray-50 transition-colors">
+                  <td class="px-4 py-3 whitespace-nowrap">
+                      <div class="flex items-center">
+                          <div class="h-10 w-10 rounded-full flex items-center justify-center mr-3 border">
+                              ${
+                                compte.photo &&
+                                compte.photo !== "NULL" &&
+                                compte.photo !== ""
+                                  ? `<img src="${compte.photo}" alt="${
+                                      compte.nom_prenom || "Utilisateur"
+                                    }" class="rounded-full object-cover" onerror="this.parentNode.innerHTML = '${getInitialsCircle(
+                                      compte.nom_prenom || ""
+                                    ).replace(/'/g, "\\'")}';"/>`
+                                  : getInitialsCircle(compte.nom_prenom || "")
+                              }
+                          </div>
+                          <div>
+                              <div class="text-sm font-medium text-gray-900">${
+                                compte.nom_prenom || "Nom inconnu"
+                              }</div>
+                          </div>
+                      </div>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">${
+                        compte.role || "Non défini"
+                      }</span>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${
+                    compte.service || "Non défini"
+                  }</td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${
+                    compte.bureau || "Non défini"
+                  }</td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${
+                    compte.connexion
+                      ? new Date(compte.connexion).toLocaleString("fr-FR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Jamais"
+                  }</td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                      <!-- CORRECTION : Utilisation complète des fonctions utilitaires -->
+                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statutClass}">
+                          ${statutIcon} ${statutText}
+                      </span>
+                  </td>
+                  <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${
+                    compte.etat || "Non défini"
+                  }</td>
+                  <td class="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                      <div class="flex space-x-2 justify-end">
+                          <button class="edit-compte-btn text-blue-600 hover:text-blue-900 transition-colors" data-id="${
+                            compte.id
+                          }" title="Modifier">
+                              <i class="fas fa-edit"></i>
+                          </button>
+                          <button class="delete-compte-btn text-red-600 hover:text-red-900 transition-colors" data-id="${
+                            compte.id
+                          }" title="Supprimer">
+                              <i class="fas fa-trash"></i>
+                          </button>
+                      </div>
+                  </td>
+              </tr>
+          `;
             })
             .join("");
   }
@@ -834,6 +961,6 @@ function refreshDisplay() {
 eventBus.subscribe("comptes:externalUpdate", (data) => {
   console.log("Mise à jour externe des comptes reçue", data);
   loadComptesData();
-  loadAgentsData();
+  loadChefsServiceData();
   refreshDisplay();
 });

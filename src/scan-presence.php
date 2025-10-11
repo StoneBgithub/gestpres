@@ -557,7 +557,7 @@ $isLoggedIn = isset($_SESSION['is_logged_in']) && $_SESSION['is_logged_in'] === 
                                 présence</label>
                             <input type="time" id="presence_time" name="presence_time"
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-congo-green focus:border-congo-green"
-                                required>
+                                min="07:00" max="09:59" required>
                         </div>
 
                         <!-- Bouton de soumission -->
@@ -678,173 +678,18 @@ $isLoggedIn = isset($_SESSION['is_logged_in']) && $_SESSION['is_logged_in'] === 
         </div>
     </footer>
 
-
-    <!-- <script>
-    document.addEventListener("DOMContentLoaded", function() {
-        // Initialisation de Select2 avec placeholders
-        $("#service").select2({
-            placeholder: "Rechercher un service",
-            allowClear: true,
-        });
-        $("#bureau").select2({
-            placeholder: "Rechercher un bureau",
-            allowClear: true,
-        });
-        $("#agent").select2({
-            placeholder: "Rechercher un agent (nom et prénom)",
-            allowClear: true,
-        });
-
-        function loadServices() {
-            fetch("services.php")
-                .then((res) => {
-                    if (!res.ok) throw new Error(`Erreur HTTP ${res.status}`);
-                    return res.json();
-                })
-                .then((data) => {
-                    if (data.error) {
-                        showErrorModal(
-                            data.error || "Erreur lors du chargement des services."
-                        );
-                        return;
-                    }
-                    const serviceSelect = $("#service");
-                    serviceSelect
-                        .empty()
-                        .append('<option value="">Rechercher un service</option>');
-                    data.forEach((s) =>
-                        serviceSelect.append(`<option value="${s.id}">${s.name}</option>`)
-                    );
-                    serviceSelect.trigger("change.select2");
-                })
-                .catch((error) => {
-                    console.error("Erreur loadServices:", error);
-                    showErrorModal(
-                        "Impossible de charger les services. Vérifiez votre connexion ou contactez l'administrateur."
-                    );
-                });
-        }
-
-        function loadBureaux(serviceId) {
-            fetch(`bureaux.php?service_id=${serviceId}`)
-                .then((res) => {
-                    if (!res.ok) throw new Error(`Erreur HTTP ${res.status}`);
-                    return res.json();
-                })
-                .then((data) => {
-                    if (data.error) {
-                        showErrorModal(
-                            data.error || "Erreur lors du chargement des bureaux."
-                        );
-                        return;
-                    }
-                    const bureauSelect = $("#bureau");
-                    bureauSelect
-                        .prop("disabled", false)
-                        .empty()
-                        .append('<option value="">Rechercher un bureau</option>');
-                    data.forEach((b) =>
-                        bureauSelect.append(`<option value="${b.id}">${b.name}</option>`)
-                    );
-                    bureauSelect.trigger("change.select2");
-                })
-                .catch((error) => {
-                    console.error("Erreur loadBureaux:", error);
-                    showErrorModal("Impossible de charger les bureaux.");
-                });
-        }
-
-        function loadAgents(serviceId = "", bureauId = "") {
-            let url = "agents.php?";
-            if (serviceId) url += `service_id=${serviceId}&`;
-            if (bureauId) url += `bureau_id=${bureauId}`;
-            fetch(url)
-                .then((res) => {
-                    if (!res.ok) throw new Error(`Erreur HTTP ${res.status}`);
-                    return res.json();
-                })
-                .then((data) => {
-                    if (data.error) {
-                        showErrorModal(data.error || "Erreur lors du chargement des agents.");
-                        return;
-                    }
-                    const agentSelect = $("#agent");
-                    agentSelect
-                        .empty()
-                        .append(
-                            '<option value="">Rechercher un agent (nom et prénom)</option>'
-                        );
-                    data.forEach((a) =>
-                        agentSelect.append(
-                            `<option value="${a.id}" data-service="${a.service_id}" data-bureau="${a.bureau_id}">${a.nom} ${a.prenom}</option>`
-                        )
-                    );
-                    agentSelect.prop("disabled", false).trigger("change.select2");
-                })
-                .catch((error) => {
-                    console.error("Erreur loadAgents:", error);
-                    showErrorModal("Impossible de charger les agents.");
-                });
-        }
-
-        // Initialisation
-        loadServices();
-        loadAgents(); // Charger tous les agents pour la sélection directe
-
-        // Événement : changement du service
-        $("#service").on("change", function() {
-            const serviceId = $(this).val();
-            $("#bureau")
-                .prop("disabled", true)
-                .empty()
-                .append('<option value="">Rechercher un bureau</option>');
-            $("#agent")
-                .prop("disabled", true)
-                .empty()
-                .append('<option value="">Rechercher un agent (nom et prénom)</option>');
-            if (serviceId) {
-                loadBureaux(serviceId);
-                loadAgents(serviceId);
-            }
-        });
-
-        // Événement : changement du bureau
-        $("#bureau").on("change", function() {
-            const bureauId = $(this).val();
-            const serviceId = $("#service").val();
-            $("#agent")
-                .prop("disabled", true)
-                .empty()
-                .append('<option value="">Rechercher un agent (nom et prénom)</option>');
-            if (bureauId) {
-                loadAgents(serviceId, bureauId);
-            } else if (serviceId) {
-                loadAgents(serviceId);
-            }
-        });
-
-        // Événement : changement de l'agent
-        $("#agent").on("change", function() {
-            const selected = $(this).find("option:selected");
-            const serviceId = selected.data("service");
-            const bureauId = selected.data("bureau");
-            if (serviceId && bureauId) {
-                $("#service").val(serviceId).trigger("change.select2");
-                // Supprimer setTimeout pour éviter les problèmes de synchronisation
-                loadBureaux(serviceId);
-                $("#bureau").val(bureauId).trigger("change.select2");
-            }
-        });
-    });
-    </script> -->
-
-
-
-
     <script>
     let html5QrCode = null;
     let isScanning = false;
     let currentMethod = 'qr';
+
+    // Vérifier si le scan est autorisé selon l'heure
+    function isScanAllowed() {
+        const now = new Date();
+        const currentHour = now.getHours(); // Format 24h (0-23)
+        // Plage interdite : 10h00 à 23h59 OU 00h00 à 06h59
+        return !(currentHour >= 10 || currentHour < 7);
+    }
 
     function speakMessage(message, isError = false) {
         if ('speechSynthesis' in window) {
@@ -935,6 +780,13 @@ $isLoggedIn = isset($_SESSION['is_logged_in']) && $_SESSION['is_logged_in'] === 
     function startQRScanner() {
         if (isScanning) return;
 
+        // Vérifier l'heure avant de démarrer le scanner
+        if (!isScanAllowed()) {
+            showErrorModal("Les scans sont interdits entre 10h00 et 07h00 le lendemain matin.");
+            speakMessage("Les scans sont interdits entre 10h00 et 07h00 le lendemain matin.", true);
+            return;
+        }
+
         if (!html5QrCode) {
             html5QrCode = new Html5Qrcode("qr-reader");
         }
@@ -998,6 +850,15 @@ $isLoggedIn = isset($_SESSION['is_logged_in']) && $_SESSION['is_logged_in'] === 
     }
 
     function processPresence(matricule = null) {
+        // agentId
+
+        // Vérifier l'heure actuelle pour le mode QR
+        if (currentMethod === 'qr' && !isScanAllowed()) {
+            showErrorModal("Les scans sont interdits entre 11h00 et 07h00 le lendemain matin.");
+            speakMessage("Les scans sont interdits entre 11h00 et 07h00 le lendemain matin.", true);
+            return;
+        }
+
         let agentId = matricule || document.getElementById('agent')?.value || '';
         const presenceDate = document.getElementById('presence_date')?.value || '';
         const presenceTime = document.getElementById('presence_time')?.value || '';
@@ -1013,6 +874,18 @@ $isLoggedIn = isset($_SESSION['is_logged_in']) && $_SESSION['is_logged_in'] === 
             speakMessage("Veuillez remplir la date et l'heure pour la soumission manuelle.", true);
             return;
         }
+
+
+        // Vérifier l'heure sélectionnée pour le mode manuel
+        if (currentMethod === 'manual') {
+            const selectedHour = parseInt(presenceTime.split(':')[0], 10);
+            if (selectedHour >= 10 || selectedHour < 7) {
+                showErrorModal("Les heures sélectionnées doivent être entre 07h00 et 10h59.");
+                speakMessage("Les heures sélectionnées doivent être entre 07h00 et 10h59.", true);
+                return;
+            }
+        }
+
 
         const formData = new URLSearchParams();
         formData.append('agent', agentId);
@@ -1199,27 +1072,6 @@ $isLoggedIn = isset($_SESSION['is_logged_in']) && $_SESSION['is_logged_in'] === 
         document.querySelector('.stop-scan-btn').classList.add('btn-departure');
     });
     </script>
-
-
-    <!-- <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialisation de Select2 sur les champs
-        $('#service').select2({
-            placeholder: "Rechercher un service",
-            allowClear: true
-        });
-
-        $('#bureau').select2({
-            placeholder: "Rechercher un bureau",
-            allowClear: true
-        });
-
-        $('#agent').select2({
-            placeholder: "Rechercher un agent",
-            allowClear: true
-        });
-    });
-    </script> -->
 
 </body>
 

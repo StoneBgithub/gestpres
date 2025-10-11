@@ -21,8 +21,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } else {
         try {
             // Rechercher l'agent par son email et récupérer le rôle via la jointure
-            $stmt = $pdo->prepare("
-    SELECT a.id, a.matricule, a.nom, a.prenom, l.mot_de_passe, r.libelle AS role
+          $stmt = $pdo->prepare("
+    SELECT a.id, a.matricule, a.nom, a.prenom, l.mot_de_passe, r.libelle AS role, l.statut
     FROM agent a 
     INNER JOIN login l ON a.id = l.agent_id 
     INNER JOIN role r ON l.role_id = r.id
@@ -36,33 +36,42 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $user = $stmt->fetch();
                 
                 // Vérifier le mot de passe
-                if (password_verify($password, $user['mot_de_passe']) || $password === $user['mot_de_passe']) {
-                    // Authentification réussie - Créer la session
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['user_nom'] = $user['nom'];
-                    $_SESSION['user_prenom'] = $user['prenom'];
-                    $_SESSION['user_matricule'] = $user['matricule'];
-                    $_SESSION['role'] = $user['role']; // Récupéré depuis la table role
-                    $_SESSION['is_logged_in'] = true;
-                    
-                    // Si le mot de passe était en clair, le hacher maintenant
-    if ($password === $user['mot_de_passe']) {
-        $hashed = password_hash($password, PASSWORD_DEFAULT);
-        $update = $pdo->prepare("UPDATE login SET mot_de_passe = :mot_de_passe WHERE agent_id = :agent_id");
-        $update->execute([':mot_de_passe' => $hashed, ':agent_id' => $user['id']]);
+if (password_verify($password, $user['mot_de_passe']) || $password === $user['mot_de_passe']) {
+    // VÉRIFICATION DU STATUT AJOUTÉE ICI
+    if ($user['statut'] !== 'activé') {
+        $error = "Votre compte est désactivé. Veuillez contacter l'administrateur.";
+        // Journaliser la tentative de connexion d'un compte désactivé
+        error_log("Tentative de connexion avec compte désactivé - Email: " . $email);
+    } else {
+        // Authentification réussie - Créer la session
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['user_nom'] = $user['nom'];
+        $_SESSION['user_prenom'] = $user['prenom'];
+        $_SESSION['user_matricule'] = $user['matricule'];
+        $_SESSION['role'] = $user['role']; // Récupéré depuis la table role
+        $_SESSION['is_logged_in'] = true;
+        
+        // Si le mot de passe était en clair, le hacher maintenant
+        if ($password === $user['mot_de_passe']) {
+            $hashed = password_hash($password, PASSWORD_DEFAULT);
+            $update = $pdo->prepare("UPDATE login SET mot_de_passe = :mot_de_passe WHERE agent_id = :agent_id");
+            $update->execute([':mot_de_passe' => $hashed, ':agent_id' => $user['id']]);
+        }
+        
+        // Redirection
+        $update = $pdo->prepare("UPDATE login SET derniere_connexion = NOW(), etat='connecté' WHERE agent_id = ?");
+        $update->execute([$user['id']]);
+        
+        if (isset($_GET['from']) && $_GET['from'] === 'scan') {
+            header("Location: scan-presence.php");
+        } else {
+            header("Location: dashboard.php");
+        }
+        exit();
     }
-                    // Redirection
-                    $update = $pdo->prepare("UPDATE login SET derniere_connexion = NOW(), etat='connecté' WHERE id = ?");
-                     $update->execute([$user['id']]);
-                    if (isset($_GET['from']) && $_GET['from'] === 'scan') {
-                        header("Location: scan-presence.php");
-                    } else {
-                        header("Location: dashboard.php");
-                    }
-                    exit();
-                } else {
-                    $error = "Mot de passe incorrect.";
-                }
+} else {
+    $error = "Mot de passe incorrect.";
+}
             } else {
                 $error = "Aucun compte associé à cet email.";
             }
